@@ -1,5 +1,6 @@
 #pragma once
 #include <string>
+#include <iostream>
 #include <exception>
 #include <windows.h>
 
@@ -23,8 +24,8 @@ public:
 	}
 	Version(string version)
 	{
-		try
-		{
+		//try
+		//{
 			if (version.empty())
 				throw;
 
@@ -53,11 +54,11 @@ public:
 				major = stoi(version);
 				minor = -1;
 			}
-		}
-		catch (std::exception e)
-		{
-			std::cerr << "An error has occured: " << e.what() << std::endl;
-		}
+		
+		//catch (std::exception e)
+		//{
+		//	std::cout << "An error has occured: " << e.what() << std::endl;
+		//}
 	}
 
 	~Version()
@@ -169,6 +170,6 @@ protected:
 
 	char m_versionURL[256]; // Can change if url needs to be longer.
 	char m_downloadURL[256];
-	char m_downloadPATH[MAX_PATH] = "H:/AutoUpdater.zip";
+	char m_downloadPATH[MAX_PATH] = "H://AutoUpdater.zip";
 };
 

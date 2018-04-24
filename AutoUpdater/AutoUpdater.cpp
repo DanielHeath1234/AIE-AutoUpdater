@@ -98,11 +98,20 @@ int AutoUpdater::downloadVersionNumber()
 		res = curl_easy_perform(curl);
 		curl_easy_cleanup(curl);
 
-		int find = readBuffer.find('\n');
-		readBuffer[find] = '\0';
+		/*int find = readBuffer.find('\n');
+		//(find == -1) ? (readBuffer.append('\0')) : (readBuffer[find] = '\0');
+		if (find == -1)
+		{
+			readBuffer[readBuffer.size()] = '\0';
+		}
+		else
+		{
+			readBuffer[find] = '\0';
+		}
+		*/
 		//readBuffer.replace(find, 1, '\0');
 		// Attempt to initalise downloaded version string as type Version.
-		/*for (size_t i = 0; i < readBuffer.size(); i++)
+		for (size_t i = 0; i < readBuffer.size(); i++)
 		{
 			// Replace new-line with null-terminator.
 			if (readBuffer[i] == '\n')
@@ -110,7 +119,7 @@ int AutoUpdater::downloadVersionNumber()
 				readBuffer[i] = '\0';
 				break;
 			}
-		}*/
+		}
 
 		m_newVersion = new Version(readBuffer);
 
@@ -208,7 +217,6 @@ int AutoUpdater::downloadUpdate()
 void AutoUpdater::unZipUpdate()
 {
 	ziputils::unzipper zipFile;
-	//strcat_s(m_downloadPATH, sizeof m_downloadPATH, m_downloadNAME)
 	zipFile.unZip(m_downloadPATH);
 }
 

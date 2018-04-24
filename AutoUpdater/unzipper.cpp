@@ -155,7 +155,7 @@ namespace ziputils
 		}
 
 		// Buffer to hold data read from the zip file.
-		char read_buffer[READ_SIZE];
+		char *read_buffer[READ_SIZE];
 
 		// Loop to extract all files
 		uLong i;
