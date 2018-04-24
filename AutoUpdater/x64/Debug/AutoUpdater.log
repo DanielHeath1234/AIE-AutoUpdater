@@ -1,0 +1,6 @@
+﻿  unzipper.cpp
+d:\aie\complex game systems\assessment\autoupdater\aie-autoupdater\autoupdater\unzipper.h(2): fatal error C1083: Cannot open include file: 'ioapi.h': No such file or directory
+  Source.cpp
+  AutoUpdater.cpp
+d:\aie\complex game systems\assessment\autoupdater\aie-autoupdater\autoupdater\unzipper.h(2): fatal error C1083: Cannot open include file: 'ioapi.h': No such file or directory
+  Generating Code...
