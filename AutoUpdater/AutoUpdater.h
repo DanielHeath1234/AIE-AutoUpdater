@@ -169,6 +169,6 @@ protected:
 
 	char m_versionURL[256]; // Can change if url needs to be longer.
 	char m_downloadURL[256];
-	char m_downloadPATH[MAX_PATH] = "D:/AutoUpdater.zip";
+	char m_downloadPATH[MAX_PATH] = "H:/AutoUpdater.zip";
 };
 

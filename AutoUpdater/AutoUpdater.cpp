@@ -16,6 +16,8 @@ AutoUpdater::AutoUpdater(Version cur_version, const string version_url, const st
 	strncpy_s(m_versionURL, (char*)version_url.c_str(), sizeof(m_versionURL));
 	strncpy_s(m_downloadURL, (char*)download_url.c_str(), sizeof(m_downloadURL));
 
+	//_get_pgmptr(m_downloadPATH);
+
 	// Runs the updater upon construction.
 	run();
 }
