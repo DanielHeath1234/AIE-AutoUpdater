@@ -1,8 +1,14 @@
 #pragma once
 #include <string>
+#include <exception>
 #include <windows.h>
 
 #define MAX_FILENAME 512
+
+#define VN_SUCCESS				(0)
+#define VN_UNKNOWN_ERROR		(-1)
+#define VN_FILE_NOT_FOUND		(404)
+#define VN_INVALID_VERSION		(2)
 
 using std::string;
 
@@ -17,30 +23,40 @@ public:
 	}
 	Version(string version)
 	{
-		string::size_type pos = version.find('.');
-		if (pos != string::npos)
+		try
 		{
-			major = stoi(version.substr(0, pos));
-			string::size_type pos2 = version.find('.', pos + 1);
+			if (version.empty())
+				throw;
 
-			if (pos2 != string::npos)
+			string::size_type pos = version.find('.');
+			if (pos != string::npos)
 			{
-				// Contains 2 periods.
-				minor = stoi(version.substr(pos+1, pos2));
-				strncpy_s(revision, (char*)version.substr(pos2 + 1).c_str(), sizeof(revision));
+				major = stoi(version.substr(0, pos));
+				string::size_type pos2 = version.find('.', pos + 1);
+
+				if (pos2 != string::npos)
+				{
+					// Contains 2 periods.
+					minor = stoi(version.substr(pos + 1, pos2));
+					strncpy_s(revision, (char*)version.substr(pos2 + 1).c_str(), sizeof(revision));
+				}
+				else
+				{
+					// Contains 1 period.
+					minor = stoi(version.substr(pos + 1));
+					revision[0] = '\0';
+				}
 			}
 			else
 			{
-				// Contains 1 period.
-				minor = stoi(version.substr(pos + 1));
-				revision[0] = '\0';
+				// Contains 0 periods.
+				major = stoi(version);
+				minor = -1;
 			}
 		}
-		else
+		catch (std::exception e)
 		{
-			// Contains 0 periods.
-			major = stoi(version);
-			minor = -1;
+			std::cerr << "An error has occured: " << e.what() << std::endl;
 		}
 	}
 
@@ -135,7 +151,7 @@ public:
 
 	void run();
 	
-	bool downloadVersionNumber();
+	int downloadVersionNumber();
 	bool checkForUpdate();
 	void launchGUI();
 	int downloadUpdate();

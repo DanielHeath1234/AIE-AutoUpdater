@@ -1,5 +1,5 @@
 #include "unzipper.h"
-#include <zlib.h>
+#include <zlib\zlib.h>
 #include <algorithm>
 #include <sstream>
 #include <stdio.h>
@@ -141,7 +141,7 @@ namespace ziputils
 		unzFile *zipfile = &fOpen;
 		if (zipfile == NULL)
 		{
-			printf("%s: not found\n");
+			printf("%s,: not found\n");
 			return -1;
 		}
 

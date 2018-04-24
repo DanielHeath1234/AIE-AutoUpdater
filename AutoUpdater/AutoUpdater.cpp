@@ -30,7 +30,7 @@ void AutoUpdater::run()
 	// Keep .0 on the end of float when outputting.
 	std::cout << std::fixed << std::setprecision(1);
 
-	if(downloadVersionNumber())
+	if(downloadVersionNumber() == VN_SUCCESS)
 	{
 		// Version number downloaded and handled correctly.
 
@@ -77,8 +77,9 @@ void AutoUpdater::run()
 	system("pause");
 }
 
-bool AutoUpdater::downloadVersionNumber()
+int AutoUpdater::downloadVersionNumber()
 {
+	errno_t err = 0;
 	CURL *curl;
 	CURLcode res;
 	string readBuffer;
@@ -95,33 +96,34 @@ bool AutoUpdater::downloadVersionNumber()
 		res = curl_easy_perform(curl);
 		curl_easy_cleanup(curl);
 
+		int find = readBuffer.find('\n');
+		readBuffer[find] = '\0';
+		//readBuffer.replace(find, 1, '\0');
 		// Attempt to initalise downloaded version string as type Version.
-		try
+		/*for (size_t i = 0; i < readBuffer.size(); i++)
 		{
-			for (size_t i = 0; i < readBuffer.size(); i++)
+			// Replace new-line with null-terminator.
+			if (readBuffer[i] == '\n')
 			{
-				// Replace new-line with null-terminator.
-				if (readBuffer[i] == '\n')
-				{
-					readBuffer[i] = '\0';
-					break;
-				}
+				readBuffer[i] = '\0';
+				break;
 			}
-			m_newVersion = new Version(readBuffer);
-			return true;
-		}
-		catch (...)
-		{
-			// TODO: Better error handling.
-			std::cout << "Downloaded version string = " << readBuffer << std::endl;
+		}*/
 
-			// Should only be a developer issue due to version string
-			// being incorrect on file or version_url isn't valid
-			//  / downloading the wrong thing.
-			assert("Failed to initalise version string as type Version or invalid version url.");
+		m_newVersion = new Version(readBuffer);
 
-			return false;
-		}
+		// TODO: Better error handling.
+
+		if (m_newVersion->getMajor() == 404 && m_newVersion->getMinor() == -1)
+			return VN_FILE_NOT_FOUND;
+
+
+
+		return VN_SUCCESS;
+		// Should only be a developer issue due to version string
+		// being incorrect on file or version_url isn't valid
+		//  / downloading the wrong thing.
+	
 	}
 	return false;
 }

@@ -1,6 +1,6 @@
 #pragma once
-#include <ioapi.h>
-#include <unzip.h>
+#include "zlib\ioapi.h"
+#include "zlib\unzip.h"
 #include <string>
 #include <vector>
 #include <iostream>
