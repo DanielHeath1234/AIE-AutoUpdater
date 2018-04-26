@@ -1,6 +1,28 @@
 ﻿  unzipper.cpp
-d:\aie\complex game systems\assessment\autoupdater\aie-autoupdater\autoupdater\unzipper.h(2): fatal error C1083: Cannot open include file: 'ioapi.h': No such file or directory
+h:\aie\complex game systems\assessment\autoupdater\aie-autoupdater\autoupdater\unzipper.cpp(144): warning C4473: 'printf' : not enough arguments passed for format string
+  h:\aie\complex game systems\assessment\autoupdater\aie-autoupdater\autoupdater\unzipper.cpp(144): note: placeholders and their parameters expect 1 variadic arguments, but 0 were provided
+  h:\aie\complex game systems\assessment\autoupdater\aie-autoupdater\autoupdater\unzipper.cpp(144): note: the missing variadic argument 1 is required by format string '%s'
   Source.cpp
   AutoUpdater.cpp
-d:\aie\complex game systems\assessment\autoupdater\aie-autoupdater\autoupdater\unzipper.h(2): fatal error C1083: Cannot open include file: 'ioapi.h': No such file or directory
+h:\aie\complex game systems\assessment\autoupdater\aie-autoupdater\autoupdater\autoupdater.cpp(248): warning C4244: 'initializing': conversion from 'double' to 'int', possible loss of data
   Generating Code...
+AutoUpdater.obj : error LNK2019: unresolved external symbol __imp_curl_easy_strerror referenced in function "public: int __cdecl AutoUpdater::downloadUpdate(void)" (?downloadUpdate@AutoUpdater@@QEAAHXZ)
+AutoUpdater.obj : error LNK2019: unresolved external symbol __imp_curl_easy_init referenced in function "public: int __cdecl AutoUpdater::downloadUpdate(void)" (?downloadUpdate@AutoUpdater@@QEAAHXZ)
+AutoUpdater.obj : error LNK2019: unresolved external symbol __imp_curl_easy_setopt referenced in function "public: int __cdecl AutoUpdater::downloadUpdate(void)" (?downloadUpdate@AutoUpdater@@QEAAHXZ)
+AutoUpdater.obj : error LNK2019: unresolved external symbol __imp_curl_easy_perform referenced in function "public: int __cdecl AutoUpdater::downloadUpdate(void)" (?downloadUpdate@AutoUpdater@@QEAAHXZ)
+AutoUpdater.obj : error LNK2019: unresolved external symbol __imp_curl_easy_cleanup referenced in function "public: int __cdecl AutoUpdater::downloadUpdate(void)" (?downloadUpdate@AutoUpdater@@QEAAHXZ)
+unzipper.obj : error LNK2019: unresolved external symbol unzOpen referenced in function "public: int __cdecl ziputils::unzipper::unZip(class std::basic_string<char,struct std::char_traits<char>,class std::allocator<char> >)" (?unZip@unzipper@ziputils@@QEAAHV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@Z)
+unzipper.obj : error LNK2019: unresolved external symbol unzOpen64 referenced in function "public: bool __cdecl ziputils::unzipper::open(char const *)" (?open@unzipper@ziputils@@QEAA_NPEBD@Z)
+unzipper.obj : error LNK2019: unresolved external symbol unzClose referenced in function "public: void __cdecl ziputils::unzipper::close(void)" (?close@unzipper@ziputils@@QEAAXXZ)
+unzipper.obj : error LNK2019: unresolved external symbol unzGetGlobalInfo referenced in function "public: int __cdecl ziputils::unzipper::unZip(class std::basic_string<char,struct std::char_traits<char>,class std::allocator<char> >)" (?unZip@unzipper@ziputils@@QEAAHV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@Z)
+unzipper.obj : error LNK2019: unresolved external symbol unzGetGlobalInfo64 referenced in function "private: void __cdecl ziputils::unzipper::readEntries(void)" (?readEntries@unzipper@ziputils@@AEAAXXZ)
+unzipper.obj : error LNK2019: unresolved external symbol unzGoToNextFile referenced in function "private: void __cdecl ziputils::unzipper::readEntries(void)" (?readEntries@unzipper@ziputils@@AEAAXXZ)
+unzipper.obj : error LNK2019: unresolved external symbol unzLocateFile referenced in function "public: bool __cdecl ziputils::unzipper::openEntry(char const *)" (?openEntry@unzipper@ziputils@@QEAA_NPEBD@Z)
+unzipper.obj : error LNK2019: unresolved external symbol unzGetCurrentFileInfo64 referenced in function "public: unsigned int __cdecl ziputils::unzipper::getEntrySize(void)" (?getEntrySize@unzipper@ziputils@@QEAAIXZ)
+unzipper.obj : error LNK2019: unresolved external symbol unzGetCurrentFileInfo referenced in function "public: int __cdecl ziputils::unzipper::unZip(class std::basic_string<char,struct std::char_traits<char>,class std::allocator<char> >)" (?unZip@unzipper@ziputils@@QEAAHV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@Z)
+unzipper.obj : error LNK2019: unresolved external symbol unzOpenCurrentFile referenced in function "public: bool __cdecl ziputils::unzipper::openEntry(char const *)" (?openEntry@unzipper@ziputils@@QEAA_NPEBD@Z)
+unzipper.obj : error LNK2019: unresolved external symbol unzCloseCurrentFile referenced in function "public: void __cdecl ziputils::unzipper::closeEntry(void)" (?closeEntry@unzipper@ziputils@@QEAAXXZ)
+unzipper.obj : error LNK2019: unresolved external symbol unzReadCurrentFile referenced in function "public: class ziputils::unzipper & __cdecl ziputils::unzipper::operator>>(class std::basic_ostream<char,struct std::char_traits<char> > &)" (??5unzipper@ziputils@@QEAAAEAV01@AEAV?$basic_ostream@DU?$char_traits@D@std@@@std@@@Z)
+H:\AIE\Complex Game Systems\Assessment\AutoUpdater\AIE-AutoUpdater\lib\libcurl\libcurl.lib : warning LNK4272: library machine type 'x86' conflicts with target machine type 'x64'
+H:\AIE\Complex Game Systems\Assessment\AutoUpdater\AIE-AutoUpdater\lib\zlib\zlibstatd.lib : warning LNK4272: library machine type 'x86' conflicts with target machine type 'x64'
+H:\AIE\Complex Game Systems\Assessment\AutoUpdater\AIE-AutoUpdater\x64\Debug\AutoUpdater.exe : fatal error LNK1120: 17 unresolved externals

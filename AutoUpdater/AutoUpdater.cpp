@@ -188,7 +188,7 @@ int AutoUpdater::downloadUpdate()
 			return err;
 
 		// Debug output.
-		//curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
+		curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
 
 		// Shows progress of the download.
 		curl_easy_setopt(curl, CURLOPT_NOPROGRESS, FALSE);

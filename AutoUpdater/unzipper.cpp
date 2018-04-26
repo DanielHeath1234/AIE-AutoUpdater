@@ -250,7 +250,7 @@ namespace ziputils
 			}
 		}
 
-		unzClose(zipfile);
+		unzClose(*zipfile);
 
 		return 0;
 	}
