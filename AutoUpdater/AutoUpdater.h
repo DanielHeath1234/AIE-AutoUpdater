@@ -4,7 +4,16 @@
 #include <exception>
 #include <windows.h>
 
+#if defined(MSDOS) || defined(OS2) || defined(WIN32) || defined(__CYGWIN__)
+#  include <fcntl.h>
+#  include <io.h>
+#  define SET_BINARY_MODE(file) setmode(fileno(file), O_BINARY)
+#else
+#  define SET_BINARY_MODE(file)
+#endif
+
 #define MAX_FILENAME 512
+#define CHUNK 16384
 
 #define VN_SUCCESS				(0)
 #define VN_UNKNOWN_ERROR		(-1)
@@ -156,12 +165,14 @@ public:
 	bool checkForUpdate();
 	void launchGUI();
 	int downloadUpdate();
-	void unZipUpdate();
+	int unZipUpdate();
 
 private:
 	static size_t _WriteCallback(void *contents, size_t size, size_t nmemb, void *userp);
 	static size_t _WriteData(void *ptr, size_t size, size_t nmemb, FILE *stream);
 	static int _DownloadProgress(void* ptr, double total_download, double downloaded, double total_upload, double uploaded);
+	void zerr(int ret);
+	int inf(FILE * source, FILE * dest);
 
 protected:
 
@@ -171,5 +182,6 @@ protected:
 	char m_versionURL[256]; // Can change if url needs to be longer.
 	char m_downloadURL[256];
 	char m_downloadPATH[MAX_PATH] = "H://AutoUpdater.zip";
+	char m_fileNAME[MAX_FILENAME] = "AutoUpdater";
 };
 

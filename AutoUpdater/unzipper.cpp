@@ -141,25 +141,25 @@ namespace ziputils
 		unzFile *zipfile = &fOpen;
 		if (zipfile == NULL)
 		{
-			printf("%s,: not found\n");
+			printf("%s", ": not found\n");
 			return -1;
 		}
 
 		// Get info about the zip file
-		unz_global_info global_info;
-		if (unzGetGlobalInfo(zipfile, &global_info) != UNZ_OK)
+		unz_global_info *global_info = new unz_global_info;
+		if (unzGetGlobalInfo(zipfile, global_info) != UNZ_OK)
 		{
 			printf("could not read file global info\n");
 			unzClose(zipfile);
 			return -1;
-		}
+		} 
 
 		// Buffer to hold data read from the zip file.
 		char *read_buffer[READ_SIZE];
 
 		// Loop to extract all files
 		uLong i;
-		for (i = 0; i < global_info.number_entry; ++i)
+		for (i = 0; i < (*global_info).number_entry; ++i)
 		{
 			// Get info about current file.
 			unz_file_info file_info;
@@ -203,8 +203,8 @@ namespace ziputils
 				if (out == NULL)
 				{
 					printf("could not open destination file\n");
-					unzCloseCurrentFile(zipfile);
-					unzClose(zipfile);
+					unzCloseCurrentFile(*zipfile);
+					unzClose(*zipfile);
 					return -1;
 				}
 
@@ -223,7 +223,11 @@ namespace ziputils
 					// Write data to file.
 					if (error > 0)
 					{
-						size_t err = fwrite(read_buffer, error, 1, out); // You should check return of fwrite...
+						if (fwrite(read_buffer, error, 1, out) != 1) // You should check return of fwrite...
+						{
+							printf("fwrite error.");
+							return -1;
+						}
 					}
 				} while (error > 0);
 
@@ -233,23 +237,27 @@ namespace ziputils
 			unzCloseCurrentFile(*zipfile);
 
 			// Go the the next entry listed in the zip file.
-			if ((i + 1) < global_info.number_entry)
+			if ((i + 1) < (*global_info).number_entry)
 			{
-				/*if (unzGoToNextFile(*zipfile) == UNZ_END_OF_LIST_OF_FILE)
+				int err = unzGoToNextFile(*zipfile);
+				if (err != UNZ_OK)
 				{
-					printf("\nUnzip Successful.\n");
-					unzClose(*zipfile);
-					return -1;
-				}*/
-				if (unzGoToNextFile(*zipfile) != UNZ_OK)
-				{
+					if (err == UNZ_END_OF_LIST_OF_FILE)
+					{
+						printf("\nUnzip Successful.\n");
+						unzClose(*zipfile);
+						delete global_info;
+						return -1;
+					}
 					printf("cound not read next file\n");
 					unzClose(*zipfile);
+					delete global_info;
 					return -1;
 				}
 			}
 		}
 
+		delete global_info;
 		unzClose(*zipfile);
 
 		return 0;

@@ -1,6 +1,0 @@
-﻿  unzipper.cpp
-h:\aie\complex game systems\assessment\autoupdater\aie-autoupdater\autoupdater\unzipper.cpp(144): warning C4473: 'printf' : not enough arguments passed for format string
-  h:\aie\complex game systems\assessment\autoupdater\aie-autoupdater\autoupdater\unzipper.cpp(144): note: placeholders and their parameters expect 1 variadic arguments, but 0 were provided
-  h:\aie\complex game systems\assessment\autoupdater\aie-autoupdater\autoupdater\unzipper.cpp(144): note: the missing variadic argument 1 is required by format string '%s'
-  AutoUpdater.vcxproj -> H:\AIE\Complex Game Systems\Assessment\AutoUpdater\AIE-AutoUpdater\Debug\AutoUpdater.exe
-  AutoUpdater.vcxproj -> H:\AIE\Complex Game Systems\Assessment\AutoUpdater\AIE-AutoUpdater\Debug\AutoUpdater.pdb (Partial PDB)
