@@ -1,24 +1,23 @@
 #pragma once
 #include <string>
 #include <iostream>
-#include <exception>
-#include <windows.h>
-
-#if defined(MSDOS) || defined(OS2) || defined(WIN32) || defined(__CYGWIN__)
-#  include <fcntl.h>
-#  include <io.h>
-#  define SET_BINARY_MODE(file) setmode(fileno(file), O_BINARY)
-#else
-#  define SET_BINARY_MODE(file)
-#endif
 
 #define MAX_FILENAME 512
-#define CHUNK 16384
+#define dir_delimter '/'
+#define READ_SIZE 8192
 
-#define VN_SUCCESS				(0)
-#define VN_UNKNOWN_ERROR		(-1)
+#define UPDATER_SUCCESS			(0)
+#define UPDATER_ERROR			(-1)
+
+#define VN_SUCCESS				(UPDATER_SUCCESS)
+#define VN_UNKNOWN_ERROR		(UPDATER_ERROR)
 #define VN_FILE_NOT_FOUND		(404)
-#define VN_INVALID_VERSION		(2)
+#define VN_INVALID_VERSION		(3)
+
+#define DU_SUCCESS				(UPDATER_SUCCESS)
+#define DU_UNKNOWN_ERROR		(UPDATER_ERROR)
+#define DU_ERROR_WRITE_TO_FILE  (2)
+
 
 using std::string;
 
@@ -33,41 +32,34 @@ public:
 	}
 	Version(string version)
 	{
-		//try
-		//{
-			if (version.empty())
-				throw;
+		if (version.empty())
+			throw;
 
-			string::size_type pos = version.find('.');
-			if (pos != string::npos)
+		string::size_type pos = version.find('.');
+		if (pos != string::npos)
+		{
+			major = stoi(version.substr(0, pos));
+			string::size_type pos2 = version.find('.', pos + 1);
+
+			if (pos2 != string::npos)
 			{
-				major = stoi(version.substr(0, pos));
-				string::size_type pos2 = version.find('.', pos + 1);
-
-				if (pos2 != string::npos)
-				{
-					// Contains 2 periods.
-					minor = stoi(version.substr(pos + 1, pos2));
-					strncpy_s(revision, (char*)version.substr(pos2 + 1).c_str(), sizeof(revision));
-				}
-				else
-				{
-					// Contains 1 period.
-					minor = stoi(version.substr(pos + 1));
-					revision[0] = '\0';
-				}
+				// Contains 2 periods.
+				minor = stoi(version.substr(pos + 1, pos2));
+				strncpy_s(revision, (char*)version.substr(pos2 + 1).c_str(), sizeof(revision));
 			}
 			else
 			{
-				// Contains 0 periods.
-				major = stoi(version);
-				minor = -1;
+				// Contains 1 period.
+				minor = stoi(version.substr(pos + 1));
+				revision[0] = '\0';
 			}
-		
-		//catch (std::exception e)
-		//{
-		//	std::cout << "An error has occured: " << e.what() << std::endl;
-		//}
+		}
+		else
+		{
+			// Contains 0 periods.
+			major = stoi(version);
+			minor = -1;
+		}
 	}
 
 	~Version()
@@ -159,7 +151,7 @@ public:
 	AutoUpdater(Version cur_version, const string version_url, const string download_url = "");
 	~AutoUpdater();
 
-	void run();
+	int run();
 	
 	int downloadVersionNumber();
 	bool checkForUpdate();
@@ -171,8 +163,7 @@ private:
 	static size_t _WriteCallback(void *contents, size_t size, size_t nmemb, void *userp);
 	static size_t _WriteData(void *ptr, size_t size, size_t nmemb, FILE *stream);
 	static int _DownloadProgress(void* ptr, double total_download, double downloaded, double total_upload, double uploaded);
-	void zerr(int ret);
-	int inf(FILE * source, FILE * dest);
+	std::string _GetWorkingDir();
 
 protected:
 
@@ -181,7 +172,7 @@ protected:
 
 	char m_versionURL[256]; // Can change if url needs to be longer.
 	char m_downloadURL[256];
-	char m_downloadPATH[MAX_PATH] = "H://AutoUpdater.zip";
+	char m_downloadPATH[256] = "D://AutoUpdater.zip";
 	char m_fileNAME[MAX_FILENAME] = "AutoUpdater";
 };
 

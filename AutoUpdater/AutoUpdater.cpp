@@ -1,12 +1,12 @@
 #include "AutoUpdater.h"
 
 #include <stdio.h>
+//#include "zlib\ioapi.h"
+#include "zlib\unzip.h"
 #include <curl/curl.h>
-#include "unzipper.h"
 #include <iostream>
+#include <direct.h>
 #include <iomanip>
-#include <sstream>
-#include <cassert>
 
 using std::string;
 
@@ -15,8 +15,7 @@ AutoUpdater::AutoUpdater(Version cur_version, const string version_url, const st
 	// Converts const string into char array for use in CURL.
 	strncpy_s(m_versionURL, (char*)version_url.c_str(), sizeof(m_versionURL));
 	strncpy_s(m_downloadURL, (char*)download_url.c_str(), sizeof(m_downloadURL));
-
-	//_get_pgmptr(m_downloadPATH);
+	//strncpy_s(m_downloadPATH, (char*)_GetWorkingDir().c_str(), sizeof(m_downloadPATH)); // TODO: Error check download path
 
 	// Runs the updater upon construction.
 	run();
@@ -27,7 +26,7 @@ AutoUpdater::~AutoUpdater()
 
 }
 
-void AutoUpdater::run()
+int AutoUpdater::run()
 {
 	// Keep .0 on the end of float when outputting.
 	std::cout << std::fixed << std::setprecision(1);
@@ -41,7 +40,7 @@ void AutoUpdater::run()
 			// Update available.
 			// TODO: GUI
 			char input;
-			int err;
+			errno_t error;
 
 			std::cout << "Would you like to update? (y,n)" << std::endl;
 			std::cin >> input;
@@ -51,23 +50,25 @@ void AutoUpdater::run()
 			case 'y':
 				system("cls");
 				std::cout << "Downloading update please wait..." << std::endl << std::endl;
-				if (downloadUpdate() == 0)
-				{
-					std::cout << "Unzipping update..." << std::endl << std::endl;
-					err = unZipUpdate();
-				}
+				error = downloadUpdate();
+				if (error != DU_SUCCESS)
+					return error;
+				
+				std::cout << "Unzipping update..." << std::endl << std::endl;
+				unZipUpdate();
+
 				break;
 
 			case 'n':
-				return;
+				return 0;
 				break;
 
 			case 's':
-				err = unZipUpdate();
+				return unZipUpdate();
 				break;
 
 			default:
-				return;
+				return 0;
 				break;
 			}
 		}
@@ -78,6 +79,7 @@ void AutoUpdater::run()
 		}
 	}
 	system("pause");
+	return 0;
 }
 
 int AutoUpdater::downloadVersionNumber()
@@ -185,15 +187,20 @@ int AutoUpdater::downloadUpdate()
 		// Opens file stream and sets up curl.
 		curl_easy_setopt(curl, CURLOPT_URL, m_downloadURL);
 		err = fopen_s(&fp, m_downloadPATH, "wb"); // wb - create file for writing in binary mode. TODO: m_downloadPATH in Updater constructor or automatically find where it is stored? 
-		if (err != 0)
-			return err;
+		if (err != DU_SUCCESS)
+		{
+			if (err = DU_ERROR_WRITE_TO_FILE)
+				return DU_ERROR_WRITE_TO_FILE;
+
+			return DU_UNKNOWN_ERROR;
+		}
 
 		// Debug output.
 		curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
 
 		// Shows progress of the download.
-		curl_easy_setopt(curl, CURLOPT_NOPROGRESS, FALSE);
-		curl_easy_setopt(curl, CURLOPT_PROGRESSFUNCTION, _DownloadProgress);
+		//curl_easy_setopt(curl, CURLOPT_NOPROGRESS, FALSE);
+		//curl_easy_setopt(curl, CURLOPT_PROGRESSFUNCTION, _DownloadProgress);
 
 		// Follow Redirection.
 		curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
@@ -212,38 +219,136 @@ int AutoUpdater::downloadUpdate()
 
 		fclose(fp);
 	}
-	return 0;
+	return DU_SUCCESS;
 }
 
 int AutoUpdater::unZipUpdate()
 {
-	ziputils::unzipper zipFile;
-	zipFile.unZip(m_downloadPATH);
+	// Open the zip file
+	unzFile fOpen = unzOpen(m_downloadPATH);
+	unzFile *zipfile = &fOpen;
+	if (zipfile == NULL)
+	{
+		printf("%s", ": not found\n");
+		return -1;
+	}
+
+	// Get info about the zip file
+	unz_global_info *global_info = new unz_global_info;
+	if (unzGetGlobalInfo(zipfile, global_info) != UNZ_OK)
+	{
+		printf("could not read file global info\n");
+		unzClose(zipfile);
+		return -1;
+	}
+
+	// Buffer to hold data read from the zip file.
+	char *read_buffer[READ_SIZE];
+
+	// Loop to extract all files
+	uLong i;
+	for (i = 0; i < (*global_info).number_entry; ++i)
+	{
+		// Get info about current file.
+		unz_file_info file_info;
+		char filename[MAX_FILENAME];
+
+		if (unzGetCurrentFileInfo(
+			*zipfile,
+			&file_info,
+			filename,
+			MAX_FILENAME,
+			NULL, 0, NULL, 0) != UNZ_OK)
+		{
+			printf("could not read file info\n");
+			unzClose(zipfile);
+			return -1;
+		}
+
+		// Check if this entry is a directory or file.
+		const size_t filename_length = strlen(filename);
+		if (filename[filename_length - 1] == dir_delimter)
+		{
+			// Entry is a directory, so create it.
+			printf("dir:%s\n", filename);
+			_mkdir(filename);
+		}
+		else
+		{
+			// Entry is a file, so extract it.
+			printf("file:%s\n", filename);
+			if (unzOpenCurrentFile(*zipfile) != UNZ_OK)
+			{
+				printf("could not open file\n");
+				unzClose(zipfile);
+				return -1;
+			}
+
+			// Open a file to write out the data.
+			FILE *out;
+			errno_t err = 0;
+			err = fopen_s(&out, filename, "wb");
+			if (out == NULL)
+			{
+				printf("could not open destination file\n");
+				unzCloseCurrentFile(*zipfile);
+				unzClose(*zipfile);
+				return -1;
+			}
+
+			int error = UNZ_OK;
+			do
+			{
+				error = unzReadCurrentFile(*zipfile, read_buffer, READ_SIZE);
+				if (error < 0)
+				{
+					printf("error %d\n", error);
+					unzCloseCurrentFile(*zipfile);
+					unzClose(*zipfile);
+					return -1;
+				}
+
+				// Write data to file.
+				if (error > 0)
+				{
+					if (fwrite(read_buffer, error, 1, out) != 1) // You should check return of fwrite...
+					{
+						printf("fwrite error.");
+						return -1;
+					}
+				}
+			} while (error > 0);
+
+			fclose(out);
+		}
+
+		unzCloseCurrentFile(*zipfile);
+
+		// Go the the next entry listed in the zip file.
+		if ((i + 1) < (*global_info).number_entry)
+		{
+			int err = unzGoToNextFile(*zipfile);
+			if (err != UNZ_OK)
+			{
+				if (err == UNZ_END_OF_LIST_OF_FILE)
+				{
+					printf("\nUnzip Successful.\n");
+					unzClose(*zipfile);
+					delete global_info;
+					return -1;
+				}
+				printf("cound not read next file\n");
+				unzClose(*zipfile);
+				delete global_info;
+				return -1;
+			}
+		}
+	}
+
+	delete global_info;
+	unzClose(*zipfile);
+
 	return 0;
-
-	/*int ret;
-	int errIn;
-	int errOut;
-
-	/* avoid end-of-line conversions */
-	/*FILE *in;
-	FILE *out;
-
-	errIn = fopen_s(&in, m_downloadPATH, "rb+");
-	errOut = fopen_s(&out, m_fileNAME, "wb");
-
-	//_setmode(_fileno(in), _O_BINARY);
-	//_setmode(_fileno(out), _O_BINARY);
-
-	if (in == NULL)
-		perror("Error openinging input file.");
-	if (out == NULL)
-		perror("Error openinging output file.");
-
-	ret = inf(in, out);
-	if (ret != Z_OK)
-		zerr(ret);
-	return ret;*/
 }
 
 size_t AutoUpdater::_WriteCallback(void *contents, size_t size, size_t nmemb, void *userp)
@@ -260,6 +365,7 @@ size_t AutoUpdater::_WriteData(void * ptr, size_t size, size_t nmemb, FILE * str
 
 int AutoUpdater::_DownloadProgress(void * ptr, double total_download, double downloaded, double total_upload, double uploaded)
 {
+	// TODO: Convert to cout?
 	// Ensure that the file to be downloaded is not empty
 	// because that would cause a division by zero error later on.
 	if (total_download <= 0.0) {
@@ -294,84 +400,9 @@ int AutoUpdater::_DownloadProgress(void * ptr, double total_download, double dow
 	return 0;
 }
 
-void AutoUpdater::zerr(int ret)
+std::string AutoUpdater::_GetWorkingDir()
 {
-	fputs("zpipe: ", stderr);
-	switch (ret) {
-	case Z_ERRNO:
-		if (ferror(stdin))
-			fputs("error reading stdin\n", stderr);
-		if (ferror(stdout))
-			fputs("error writing stdout\n", stderr);
-		break;
-	case Z_STREAM_ERROR:
-		fputs("invalid compression level\n", stderr);
-		break;
-	case Z_DATA_ERROR:
-		fputs("invalid or incomplete deflate data\n", stderr);
-		break;
-	case Z_MEM_ERROR:
-		fputs("out of memory\n", stderr);
-		break;
-	case Z_VERSION_ERROR:
-		fputs("zlib version mismatch!\n", stderr);
-	}
-}
-
-int AutoUpdater::inf(FILE * source, FILE * dest)
-{
-	int ret;
-	unsigned have;
-	z_stream strm;
-	unsigned char in[CHUNK];
-	unsigned char out[CHUNK];
-
-	/* allocate inflate state */
-	strm.zalloc = Z_NULL;
-	strm.zfree = Z_NULL;
-	strm.opaque = Z_NULL;
-	strm.avail_in = 0;
-	strm.next_in = Z_NULL;
-	ret = inflateInit(&strm);
-	if (ret != Z_OK)
-		return ret;
-
-	/* decompress until deflate stream ends or end of file */
-	do {
-		strm.avail_in = fread(in, 1, CHUNK, source);
-		if (ferror(source)) {
-			(void)inflateEnd(&strm);
-			return Z_ERRNO;
-		}
-		if (strm.avail_in == 0)
-			break;
-		strm.next_in = in;
-
-		/* run inflate() on input until output buffer not full */
-		do {
-			strm.avail_out = CHUNK;
-			strm.next_out = out;
-			ret = inflate(&strm, Z_NO_FLUSH);
-			assert(ret != Z_STREAM_ERROR);  /* state not clobbered */
-			switch (ret) {
-			case Z_NEED_DICT:
-				ret = Z_DATA_ERROR;     /* and fall through */
-			case Z_DATA_ERROR:
-			case Z_MEM_ERROR:
-				(void)inflateEnd(&strm);
-				return ret;
-			}
-			have = CHUNK - strm.avail_out;
-			if (fwrite(out, 1, have, dest) != have || ferror(dest)) {
-				(void)inflateEnd(&strm);
-				return Z_ERRNO;
-			}
-		} while (strm.avail_out == 0);
-
-		/* done when inflate() says it's done */
-	} while (ret != Z_STREAM_END);
-
-	/* clean up and return */
-	(void)inflateEnd(&strm);
-	return ret == Z_STREAM_END ? Z_OK : Z_DATA_ERROR;
+	char path[MAX_PATH];
+	GetCurrentDirectoryA(MAX_PATH, path);
+	return path;
 }

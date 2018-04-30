@@ -21,15 +21,9 @@
     <ClCompile Include="AutoUpdater.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="unzipper.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="AutoUpdater.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="unzipper.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
