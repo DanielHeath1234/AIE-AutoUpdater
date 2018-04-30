@@ -1,24 +1,28 @@
 #include "AutoUpdater.h"
-
-#include <stdio.h>
-//#include "zlib\ioapi.h"
 #include "zlib\unzip.h"
+
 #include <curl/curl.h>
 #include <iostream>
 #include <direct.h>
+#include <algorithm>
 #include <iomanip>
 
 using std::string;
 
-AutoUpdater::AutoUpdater(Version cur_version, const string version_url, const string download_url) : m_version(&cur_version)
+AutoUpdater::AutoUpdater(Version cur_version, const string version_url, const string download_url) : m_version(&cur_version), m_error(UPDATER_SUCCESS)
 {
+	if (m_version->getError() != VN_SUCCESS)
+		m_error = m_version->getError();
+
 	// Converts const string into char array for use in CURL.
 	strncpy_s(m_versionURL, (char*)version_url.c_str(), sizeof(m_versionURL));
 	strncpy_s(m_downloadURL, (char*)download_url.c_str(), sizeof(m_downloadURL));
 	//strncpy_s(m_downloadPATH, (char*)_GetWorkingDir().c_str(), sizeof(m_downloadPATH)); // TODO: Error check download path
 
 	// Runs the updater upon construction.
-	run();
+	errno_t error = run();
+	if (error != UPDATER_SUCCESS)
+		m_error = error;
 }
 
 AutoUpdater::~AutoUpdater()
@@ -31,59 +35,68 @@ int AutoUpdater::run()
 	// Keep .0 on the end of float when outputting.
 	std::cout << std::fixed << std::setprecision(1);
 
-	if(downloadVersionNumber() == VN_SUCCESS)
+	errno_t value = UPDATER_SUCCESS;
+
+	// Downloads version number.
+	value = downloadVersionNumber();
+	if (value != VN_SUCCESS)
+		return value;
+
+	// Checks for update.
+	value = checkForUpdate();
+	if (value != UPDATER_UPDATE_AVAILABLE)
+		return value;
+
+	char input;
+	std::cout << "Would you like to update? (y,n)" << std::endl;
+	std::cin >> input;
+
+	switch (input)
 	{
-		// Version number downloaded and handled correctly.
+	case 'y':
+		system("cls");
 
-		if (checkForUpdate()) 
-		{
-			// Update available.
-			// TODO: GUI
-			char input;
-			errno_t error;
+		// Download the update.
+		std::cout << "Downloading update please wait..." << std::endl << std::endl;
+		value = downloadUpdate();
+		if (value != DU_SUCCESS)
+			return value;
 
-			std::cout << "Would you like to update? (y,n)" << std::endl;
-			std::cin >> input;
+		// Unzip the update.
+		std::cout << std::endl << "Unzipping update please wait..." << std::endl << std::endl;
+		value = unZipUpdate();
+		if (value != UZ_SUCCESS)
+			return value;
 
-			switch (input)
-			{
-			case 'y':
-				system("cls");
-				std::cout << "Downloading update please wait..." << std::endl << std::endl;
-				error = downloadUpdate();
-				if (error != DU_SUCCESS)
-					return error;
-				
-				std::cout << "Unzipping update..." << std::endl << std::endl;
-				unZipUpdate();
+		// Update was successful.
+		return UPDATER_SUCCESS;
+		break;
 
-				break;
+	case 'n':
+		return UPDATER_NO_UPDATE;
+		break;
 
-			case 'n':
-				return 0;
-				break;
+	case 's': // Debug to skip downloading update to test unzipping. TODO: Remove this with release.
+		value = unZipUpdate();
+		if (value != UZ_SUCCESS)
+			return value;
 
-			case 's':
-				return unZipUpdate();
-				break;
+		return UPDATER_SUCCESS;
+		break;
 
-			default:
-				return 0;
-				break;
-			}
-		}
-		else
-		{
-			// Up to date.
-			
-		}
+	default:
+		return UPDATER_INVALID_INPUT;
+		break;
 	}
+
+	return m_error;
 	system("pause");
-	return 0;
 }
 
 int AutoUpdater::downloadVersionNumber()
 {
+	// TODO: Better error handling.
+
 	errno_t err = 0;
 	CURL *curl;
 	CURLcode res;
@@ -92,82 +105,53 @@ int AutoUpdater::downloadVersionNumber()
 	curl = curl_easy_init();
 	if (curl)
 	{
-		// Download version number from file.
-		// TODO: Will this handle other types of URLs? 
-		// pastebin, random website etc
+		// Download raw version number from file.
 		curl_easy_setopt(curl, CURLOPT_URL, m_versionURL);
 		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, _WriteCallback);
 		curl_easy_setopt(curl, CURLOPT_WRITEDATA, &readBuffer);
+
 		res = curl_easy_perform(curl);
+		if (res != CURLE_OK)
+		{
+			std::cout << curl_easy_strerror(res) << std::endl; 
+			return VN_CURL_ERROR;
+		}
+
 		curl_easy_cleanup(curl);
 
-		/*int find = readBuffer.find('\n');
-		//(find == -1) ? (readBuffer.append('\0')) : (readBuffer[find] = '\0');
-		if (find == -1)
-		{
-			readBuffer[readBuffer.size()] = '\0';
-		}
-		else
-		{
-			readBuffer[find] = '\0';
-		}
-		*/
-		//readBuffer.replace(find, 1, '\0');
+		// Changes new-line with null-terminator.
+		std::replace(readBuffer.begin(), readBuffer.end(), '\n', '\0');
+
 		// Attempt to initalise downloaded version string as type Version.
-		for (size_t i = 0; i < readBuffer.size(); i++)
-		{
-			// Replace new-line with null-terminator.
-			if (readBuffer[i] == '\n')
-			{
-				readBuffer[i] = '\0';
-				break;
-			}
-		}
-
 		m_newVersion = new Version(readBuffer);
-
-		// TODO: Better error handling.
+		if (m_newVersion->getError() != VN_SUCCESS)
+			return VN_ERROR;
 
 		if (m_newVersion->getMajor() == 404 && m_newVersion->getMinor() == -1)
 			return VN_FILE_NOT_FOUND;
 
-
-
 		return VN_SUCCESS;
-		// Should only be a developer issue due to version string
-		// being incorrect on file or version_url isn't valid
-		//  / downloading the wrong thing.
-	
 	}
-	return false;
+	return VN_CURL_ERROR;
 }
 
-bool AutoUpdater::checkForUpdate()
+int AutoUpdater::checkForUpdate()
 {
-	// TODO: >= operator -- Make it single check.
 	// Checks if versions are equal.
-	if (m_version->operator=(*m_newVersion))
+	if (m_version->operator>=(*m_newVersion))
 	{
 		// The versions are equal.
 		std::cout << "Your project is up to date." << std::endl
 			<< "Downloaded Version: " << m_newVersion->getVersionString() << std::endl
 			<< "Current Version: " << m_version->getVersionString() << std::endl << std::endl;
-		return false;
-	}
-	else if (m_version->operator<(*m_newVersion)) // Checks for differences in versions.
-	{
-		// An update is available.
-		std::cout << "An Update is Available." << std::endl
-			<< "Newest Version: " << m_newVersion->getVersionString() << std::endl
-			<< "Current Version: " << m_version->getVersionString() << std::endl << std::endl;
-		return true;
+		return UPDATER_NO_UPDATE;
 	}
 
-	// The version downloaded version string is < current.
-	std::cout << "Your project is up to date." << std::endl
-		<< "Downloaded Version: " << m_newVersion->getVersionString() << std::endl
+	// An update is available.
+	std::cout << "An Update is Available." << std::endl
+		<< "Newest Version: " << m_newVersion->getVersionString() << std::endl
 		<< "Current Version: " << m_version->getVersionString() << std::endl << std::endl;
-	return false;
+	return UPDATER_UPDATE_AVAILABLE;
 }
 
 void AutoUpdater::launchGUI()
@@ -183,24 +167,21 @@ int AutoUpdater::downloadUpdate()
 	CURLcode res;
 
 	curl = curl_easy_init();
-	if (curl) {
+	if (curl) 
+	{
 		// Opens file stream and sets up curl.
 		curl_easy_setopt(curl, CURLOPT_URL, m_downloadURL);
-		err = fopen_s(&fp, m_downloadPATH, "wb"); // wb - create file for writing in binary mode. TODO: m_downloadPATH in Updater constructor or automatically find where it is stored? 
+		err = fopen_s(&fp, m_downloadPATH, "wb"); // wb - Create file for writing in binary mode.
 		if (err != DU_SUCCESS)
 		{
 			if (err = DU_ERROR_WRITE_TO_FILE)
 				return DU_ERROR_WRITE_TO_FILE;
 
-			return DU_UNKNOWN_ERROR;
+			return DU_ERROR;
 		}
 
 		// Debug output.
 		curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
-
-		// Shows progress of the download.
-		//curl_easy_setopt(curl, CURLOPT_NOPROGRESS, FALSE);
-		//curl_easy_setopt(curl, CURLOPT_PROGRESSFUNCTION, _DownloadProgress);
 
 		// Follow Redirection.
 		curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
@@ -213,13 +194,18 @@ int AutoUpdater::downloadUpdate()
 
 		// cURL error return, cURL cleanup and file close.
 		res = curl_easy_perform(curl);
-		if (res != CURLE_OK) { curl_easy_strerror(res); return res; }
+		if (res != CURLE_OK) 
+		{ 
+			std::cout << curl_easy_strerror(res) << std::endl; 
+			return DU_CURL_ERROR; 
+		}
 
 		curl_easy_cleanup(curl);
-
 		fclose(fp);
+		printf("\nDownload Successful.\n");
+		return DU_SUCCESS;
 	}
-	return DU_SUCCESS;
+	return DU_CURL_ERROR;
 }
 
 int AutoUpdater::unZipUpdate()
@@ -229,17 +215,17 @@ int AutoUpdater::unZipUpdate()
 	unzFile *zipfile = &fOpen;
 	if (zipfile == NULL)
 	{
-		printf("%s", ": not found\n");
-		return -1;
+		//printf("%s", ": not found\n");
+		return UZ_FILE_NOT_FOUND;
 	}
 
 	// Get info about the zip file
 	unz_global_info *global_info = new unz_global_info;
 	if (unzGetGlobalInfo(zipfile, global_info) != UNZ_OK)
 	{
-		printf("could not read file global info\n");
-		unzClose(zipfile);
-		return -1;
+		//printf("could not read file global info\n");
+		unzClose(*zipfile);
+		return UZ_GLOBAL_INFO_ERROR;
 	}
 
 	// Buffer to hold data read from the zip file.
@@ -260,9 +246,9 @@ int AutoUpdater::unZipUpdate()
 			MAX_FILENAME,
 			NULL, 0, NULL, 0) != UNZ_OK)
 		{
-			printf("could not read file info\n");
-			unzClose(zipfile);
-			return -1;
+			//printf("could not read file info\n");
+			unzClose(*zipfile);
+			return UZ_FILE_INFO_ERROR;
 		}
 
 		// Check if this entry is a directory or file.
@@ -279,9 +265,9 @@ int AutoUpdater::unZipUpdate()
 			printf("file:%s\n", filename);
 			if (unzOpenCurrentFile(*zipfile) != UNZ_OK)
 			{
-				printf("could not open file\n");
+				//printf("could not open file\n");
 				unzClose(zipfile);
-				return -1;
+				return UZ_FILE_INFO_ERROR;
 			}
 
 			// Open a file to write out the data.
@@ -290,10 +276,10 @@ int AutoUpdater::unZipUpdate()
 			err = fopen_s(&out, filename, "wb");
 			if (out == NULL)
 			{
-				printf("could not open destination file\n");
+				//printf("could not open destination file\n");
 				unzCloseCurrentFile(*zipfile);
 				unzClose(*zipfile);
-				return -1;
+				return UZ_CANNOT_OPEN_DEST_FILE;
 			}
 
 			int error = UNZ_OK;
@@ -302,19 +288,18 @@ int AutoUpdater::unZipUpdate()
 				error = unzReadCurrentFile(*zipfile, read_buffer, READ_SIZE);
 				if (error < 0)
 				{
-					printf("error %d\n", error);
+					//printf("error %d\n", error);
 					unzCloseCurrentFile(*zipfile);
 					unzClose(*zipfile);
-					return -1;
+					return UZ_READ_FILE_ERROR;
 				}
 
 				// Write data to file.
 				if (error > 0)
 				{
-					if (fwrite(read_buffer, error, 1, out) != 1) // You should check return of fwrite...
+					if (fwrite(read_buffer, error, 1, out) != 1)
 					{
-						printf("fwrite error.");
-						return -1;
+						return UZ_FWRITE_ERROR;
 					}
 				}
 			} while (error > 0);
@@ -335,12 +320,12 @@ int AutoUpdater::unZipUpdate()
 					printf("\nUnzip Successful.\n");
 					unzClose(*zipfile);
 					delete global_info;
-					return -1;
+					return UZ_SUCCESS;
 				}
-				printf("cound not read next file\n");
+				//printf("cound not read next file\n");
 				unzClose(*zipfile);
 				delete global_info;
-				return -1;
+				return UZ_CANNOT_READ_NEXT_FILE;
 			}
 		}
 	}
@@ -348,7 +333,7 @@ int AutoUpdater::unZipUpdate()
 	delete global_info;
 	unzClose(*zipfile);
 
-	return 0;
+	return UZ_SUCCESS;
 }
 
 size_t AutoUpdater::_WriteCallback(void *contents, size_t size, size_t nmemb, void *userp)
@@ -360,12 +345,14 @@ size_t AutoUpdater::_WriteCallback(void *contents, size_t size, size_t nmemb, vo
 size_t AutoUpdater::_WriteData(void * ptr, size_t size, size_t nmemb, FILE * stream)
 {
 	size_t written = fwrite(ptr, size, nmemb, stream);
+	if (written != nmemb)
+		return DU_FWRITE_ERROR;
+
 	return written * size;
 }
 
 int AutoUpdater::_DownloadProgress(void * ptr, double total_download, double downloaded, double total_upload, double uploaded)
 {
-	// TODO: Convert to cout?
 	// Ensure that the file to be downloaded is not empty
 	// because that would cause a division by zero error later on.
 	if (total_download <= 0.0) {
@@ -382,18 +369,22 @@ int AutoUpdater::_DownloadProgress(void * ptr, double total_download, double dow
 	// Create the "meter".
 	int ii = 0;
 	printf("%3.0f%% [", fractiondownloaded * 100);
+	//std::cout << fractiondownloaded * 100 << "[";
 
 	// Part  that's full already.
 	for (; ii < dots; ii++) {
 		printf("=");
+		//std::cout << "=";
 	}
 	// Remaining part (spaces).
 	for (; ii < totalDots; ii++) {
 		printf(" ");
+		//std::cout << " ";
 	}
 
 	// Back to line begin - fflush to avoid output buffering problems!
 	printf("]\r");
+	//std::cout << "]";
 	fflush(stdout);
 
 	// if you don't return 0, the transfer will be aborted - see the documentation.
