@@ -2,9 +2,10 @@
 #include <string>
 #include <iostream>
 #include <exception>
+#include <experimental/filesystem>
 
-#define MAX_PATH 260
 #define MAX_FILENAME 255
+#define MAX_PATH 260
 #define MAX_URL 2000
 #define dir_delimter '/'
 #define READ_SIZE 8192
@@ -16,38 +17,43 @@
 #define UPDATER_NO_UPDATE			(UPDATER_SUCCESS)
 #define UPDATER_EXCEPTION			(-2)
 #define UPDATER_FILE_NOT_FOUND		(404)
-#define UPDATER_FWRITE_ERROR		(5)
-#define UPDATER_CURL_ERROR			(4)
-#define UPDATER_INVALID_INPUT		(12)
+#define UPDATER_FWRITE_ERROR		(2)
+#define UPDATER_CURL_ERROR			(3)
+#define UPDATER_INVALID_INPUT		(4)
 
-// Version Number Errors. - Handles version number type and downloadVersionNumber() function.
+// 0 Version Number Errors. - Handles version number type and downloadVersionNumber() function.
 #define VN_SUCCESS					(UPDATER_SUCCESS)
 #define VN_ERROR					(UPDATER_ERROR)
-#define VN_FILE_NOT_FOUND			(UPDATER_FILE_NOT_FOUND)
-#define VN_EXCEPTION				(UPDATER_EXCEPTION)
-#define VN_CURL_ERROR				(UPDATER_CURL_ERROR)
-#define VN_INVALID_VERSION			(3)
-#define VN_EMPTY_STRING				(11)
+#define VN_FILE_NOT_FOUND			(4040)
+#define VN_EXCEPTION				(-20)
+#define VN_CURL_ERROR				(40)
+#define VN_INVALID_VERSION			(30)
+#define VN_EMPTY_STRING				(110)
 
-// Downloading Update Errors. - Handles downloadUpdate() function.
+// 1 Downloading Update Errors. - Handles downloadUpdate() function.
 #define DU_SUCCESS					(UPDATER_SUCCESS)
 #define DU_ERROR					(UPDATER_ERROR)
-#define DU_FILE_NOT_FOUND			(UPDATER_FILE_NOT_FOUND)
-#define DU_FWRITE_ERROR				(UPDATER_FWRITE_ERROR)
-#define DU_CURL_ERROR				(UPDATER_CURL_ERROR)
-#define DU_ERROR_WRITE_TO_FILE		(2)
+#define DU_FILE_NOT_FOUND			(4041)
+#define DU_ERROR_WRITE_TO_FILE		(21)
+#define DU_CURL_ERROR				(41)
+#define DU_FWRITE_ERROR				(51)
 
-// Unzipping Errors. - Handles unZip() function
+// 2 Unzipping Errors. - Handles unZip() function
 #define UZ_SUCCESS					(UPDATER_SUCCESS)
 #define UZ_ERROR					(UPDATER_ERROR)
-#define UZ_FILE_NOT_FOUND			(UPDATER_FILE_NOT_FOUND)
-#define UZ_FWRITE_ERROR				(UPDATER_FWRITE_ERROR)
-#define UZ_GLOBAL_INFO_ERROR		(6)
-#define UZ_FILE_INFO_ERROR			(7)
-#define UZ_CANNOT_OPEN_DEST_FILE	(8)
-#define UZ_READ_FILE_ERROR			(9)
-#define UZ_CANNOT_READ_NEXT_FILE	(10)
+#define UZ_FILE_NOT_FOUND			(4042)
+#define UZ_FWRITE_ERROR				(52)
+#define UZ_GLOBAL_INFO_ERROR		(62)
+#define UZ_FILE_INFO_ERROR			(72)
+#define UZ_CANNOT_OPEN_DEST_FILE	(82)
+#define UZ_READ_FILE_ERROR			(92)
+#define UZ_CANNOT_READ_NEXT_FILE	(102)
 
+// 3 Installing Update Errors. - Handles installUpdate() function
+#define I_SUCCESS					(UPDATER_SUCCESS)
+#define I_ERROR						(UPDATER_ERROR)
+
+namespace fs = std::experimental::filesystem;
 using std::string;
 using std::exception;
 
@@ -173,18 +179,18 @@ public:
 	inline void setRevision(char *a_revision) { strncpy_s(revision, (char*)a_revision, sizeof(revision)); }
 	// ----------------------------------------------------------------------------
 
-
 private:
 	int major;
 	int minor;
 	char revision[5]; // Memory for 4 characters and a null-terminator ('\0').
+
 	errno_t m_error;
 };
 
 class AutoUpdater
 {
 public:
-	AutoUpdater(Version cur_version, const string version_url, const string download_url);
+	AutoUpdater(Version cur_version, const string version_url, const string download_url, const string download_path = "");
 	~AutoUpdater();
 
 	int run();
@@ -192,25 +198,31 @@ public:
 	
 	int downloadVersionNumber();
 	int checkForUpdate();
-	void launchGUI();
 	int downloadUpdate();
 	int unZipUpdate();
+	int installUpdate();
 
 private:
 	static size_t _WriteCallback(void *contents, size_t size, size_t nmemb, void *userp);
 	static size_t _WriteData(void *ptr, size_t size, size_t nmemb, FILE *stream);
 	static int _DownloadProgress(void* ptr, double total_download, double downloaded, double total_upload, double uploaded);
-	std::string _GetWorkingDir();
+	void _SetDirs();
+	bool _PathExists(const fs::path& p, fs::file_status s = fs::file_status{});
+
 	errno_t m_error;
 
 protected:
-
 	Version *m_version;
 	Version *m_newVersion;
 
-	char m_versionURL[MAX_URL]; // Can change if url needs to be longer.
+	char m_versionURL[MAX_URL];
 	char m_downloadURL[MAX_URL];
-	char m_downloadPATH[MAX_PATH] = "D://AutoUpdater.zip"; // TODO: Make this automatic to working directory.
-	char m_fileNAME[MAX_FILENAME] = "AutoUpdater";
+
+	char m_directory[MAX_PATH];
+	char m_downloadDIR[MAX_PATH];
+	char m_downloadNAME[MAX_FILENAME];
+	char m_downloadFILE[MAX_PATH + MAX_FILENAME];
+	char m_extractedDIR[MAX_PATH];
+	char m_exeLOC[MAX_PATH + MAX_FILENAME];
 };
 
