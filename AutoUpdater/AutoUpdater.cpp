@@ -2,7 +2,6 @@
 #include "zlib\unzip.h"
 
 #include <curl/curl.h>
-#include <iostream>
 #include <direct.h>
 #include <algorithm>
 #include <iomanip>
@@ -26,7 +25,12 @@ AutoUpdater::AutoUpdater(Version cur_version, const string version_url, const st
 	// Runs the updater upon construction.
 	errno_t error = run();
 	if (error != UPDATER_SUCCESS)
+	{
 		m_error = error;
+
+		// TODO: Debugging purposes to be able to read console output before termination.
+		system("pause");
+	}
 }
 
 AutoUpdater::~AutoUpdater()
@@ -38,7 +42,6 @@ int AutoUpdater::run()
 {
 	// Keep .0 on the end of float when outputting.
 	std::cout << std::fixed << std::setprecision(1);
-
 	errno_t value = UPDATER_SUCCESS;
 
 	// Downloads version number.
@@ -78,7 +81,14 @@ int AutoUpdater::run()
 		if (value != I_SUCCESS)
 			return value;
 
+		// Cleanup.
+		/*std::cout << std::endl << "Cleaning up..." << std::endl << std::endl;
+		value = cleanup();
+		if (value != CU_SUCCESS)
+			return value;*/
+
 		// Update was successful.
+		std::cout << std::endl << "Update Successful." << std::endl << std::endl;
 		return UPDATER_SUCCESS;
 		break;
 
@@ -87,6 +97,7 @@ int AutoUpdater::run()
 		break;
 
 	case 's': // Debug to skip downloading update to test installing. TODO: Remove this with release.
+		// Need to run unzip to set m_extractedDIR as installation depends on it.
 		// Unzip update.
 		std::cout << std::endl << "Unzipping update please wait..." << std::endl << std::endl;
 		value = unZipUpdate();
@@ -113,8 +124,6 @@ int AutoUpdater::run()
 
 int AutoUpdater::downloadVersionNumber()
 {
-	// TODO: Better error handling.
-
 	errno_t err = 0;
 	CURL *curl;
 	CURLcode res;
@@ -158,8 +167,10 @@ int AutoUpdater::checkForUpdate()
 	// Checks if versions are equal.
 	if (m_version->operator>=(*m_newVersion))
 	{
-		// The versions are equal.
+		// The versions are equal. No Update Available.
 		std::cout << "Your project is up to date." << std::endl << std::endl;
+		// TODO: For showcase purposes.
+			system("pause");
 		return UPDATER_NO_UPDATE;
 	}
 
@@ -183,7 +194,7 @@ int AutoUpdater::downloadUpdate()
 		// Checks if download directory exists and if not, creates it.
 		if (!fs::exists(m_downloadDIR))
 		{
-			printf(m_downloadDIR, "Download path: %s does not exist. Creating directory now.");
+			std::cout << "Download path does not exist. Creating directory now." << std::endl << "Path: " << m_downloadDIR << std::endl;
 			fs::create_directory(m_downloadDIR);
 		}
 
@@ -220,7 +231,7 @@ int AutoUpdater::downloadUpdate()
 
 		curl_easy_cleanup(curl);
 		fclose(fp);
-		printf("\nDownload Successful.\n");
+		std::cout << "Download Successful." << std::endl;
 		return DU_SUCCESS;
 	}
 	return DU_CURL_ERROR;
@@ -248,10 +259,6 @@ int AutoUpdater::unZipUpdate()
 
 	// Buffer to hold data read from the zip file.
 	char *read_buffer[READ_SIZE];
-
-	// TODO: Install update. Change process and write over existing files / create new ones.
-	// Renames current process so as it can be written over.
-	//_RenameProcess();
 
 	// Loop to extract all files
 	uLong i;
@@ -341,7 +348,7 @@ int AutoUpdater::unZipUpdate()
 			{
 				if (err == UNZ_END_OF_LIST_OF_FILE)
 				{
-					printf("\nUnzip Successful.\n");
+					std::cout << "UnZip Successful." << std::endl;
 					unzClose(*zipfile);
 					delete global_info;
 					return UZ_SUCCESS;
@@ -361,20 +368,11 @@ int AutoUpdater::unZipUpdate()
 
 int AutoUpdater::installUpdate()
 {
-	// TODO: Finish Installing Update.
-	// TODO: Unzip update directly into install folder to save further folder manipulation.
 	std::error_code ec;
 
 	// Rename process.
-	fs::path process(m_exeLOC);
-	fs::path processR = process;
-	processR += ".bak";
-	fs::rename(process, processR, ec);
-	if (ec.value() != 0)
-	{
-		std::cout << ec.message() << std::endl;
-		return I_FILESYSTEM_RENAME_ERROR;
-	}
+	if (_RenameAndCopy(m_exeLOC) != 0)
+		return I_FS_RENAME_ERROR;
 
 	// Install update. (don't forget .exe)
 	fs::path update = m_extractedDIR;
@@ -394,30 +392,39 @@ int AutoUpdater::installUpdate()
 
 		if (fs::is_directory(p.path())) // Directory
 		{
-			if (fs::exists(p.path(), ec))
+			if (!fs::exists(p.path(), ec)) // Directory doesn't exist. Create it.
 			{
-				std::cout << "dir exists: " << path << std::endl;
-				//fs::create_directory(installPath, ec);
+				std::cout << "Creating Directory: " << path << std::endl;
+				fs::create_directory(installPath, ec);
 			}
 		}
 		else // File
 		{
-			if (fs::exists(p.path(), ec)) // If it already exists, overwrite.
+			if (fs::exists(p.path(), ec)) // If it already exists. Overwrite it.
 			{
-				//fs::copy(p.path(), installPath, fs::copy_options::overwrite_existing, ec);
-				std::cout << "file exists: " << path << std::endl;
+				if (p.path().extension() == ".dll") // Checks if file is a dll (may be in use) 
+				{
+					std::cout << "File at path: " << path << " is a dll and exists. " << p.path().filename() << " will be renamed and copied." << std::endl;
+					if (_RenameAndCopy(p.path()) != 0)
+						return I_FS_RENAME_DLL_ERROR;
+				}
+
+				std::cout << "Overwriting File: " << path << std::endl;
+				fs::copy(p.path(), installPath, fs::copy_options::overwrite_existing, ec);
 			}
 			else
 			{
-				std::cout << "file: " << path << std::endl;
-				//fs::copy(p.path(), installPath, fs::copy_options::none, ec);
+				std::cout << "Creating File: " << path << std::endl;
+				fs::copy(p.path(), installPath, fs::copy_options::none, ec);
 			}
 		}
 
 		if (ec.value() != 0)
 		{
-			std::cout << ec.message() << std::endl;
-			return I_FILESYSTEM_COPY_ERROR;
+			debug_status(p.path(), fs::status(p.path()));
+			debug_perms(fs::status(p.path()).permissions());
+			std::cout << "Error Message: " << ec.message() << std::endl;
+			return I_FS_COPY_ERROR;
 		}
 	}
 
@@ -425,13 +432,67 @@ int AutoUpdater::installUpdate()
 	fs::remove_all(m_downloadDIR, ec);
 	if (ec.value() != 0)
 	{
-		std::cout << ec.message() << std::endl;
-		return I_FILESYSTEM_REMOVE_ERROR;
+		std::cout << "Error Message: " << ec.message() << std::endl;
+		return I_FS_REMOVE_ERROR;
 	}
 
-	// Open new precess, close old process.
-
+	std::cout << "Install Successful." << std::endl;
 	return I_SUCCESS;
+}
+
+int AutoUpdater::cleanup()
+{
+	// TODO: Open new precess, close old process. Delete .bak files.
+	errno_t value;
+	_StartupProcess(m_exeLOC, value); // TODO: Make sure value actually changes in _StartupProcess.
+	if (value == 0) // If CreateProcess() succeeds, return is nonzero. Fail is zero.
+		return value;
+
+	// Delete renamed files and clear list.
+	/*std::error_code ec;
+	for (auto iter = m_pathsToDelete.begin(); iter != m_pathsToDelete.end(); iter++)
+	{
+		fs::remove((*iter), ec);
+		if (ec.value() != 0)
+		{
+			std::cout << "Error Message: " << ec.message() << " removing file " << (*iter) << std::endl;
+			return CU_FS_REMOVE_ERROR;
+		}
+	}*/
+
+	std::cout << "Cleanup Successful." << std::endl;
+	return CU_SUCCESS;
+}
+
+void AutoUpdater::_StartupProcess(LPCTSTR lpApplicationName, errno_t &err)
+{
+	// additional information
+		STARTUPINFO si;
+	PROCESS_INFORMATION pi;
+
+	// set the size of the structures
+	ZeroMemory(&si, sizeof(si));
+	si.cb = sizeof(si);
+	si.dwFlags = STARTF_USESHOWWINDOW;
+	si.wShowWindow = FALSE;
+	ZeroMemory(&pi, sizeof(pi));
+
+	// start the program up
+	err = CreateProcess(lpApplicationName,   // the path
+		NULL,        // Command line
+		NULL,           // Process handle not inheritable
+		NULL,           // Thread handle not inheritable
+		FALSE,          // Set handle inheritance to FALSE
+		0,              // No creation flags
+		NULL,           // Use parent's environment block
+		NULL,           // Use parent's starting directory 
+		&si,            // Pointer to STARTUPINFO structure
+		&pi             // Pointer to PROCESS_INFORMATION structure (removed extra parentheses)
+	);
+		
+	// Close process and thread handles. 
+	CloseHandle(pi.hProcess);
+	CloseHandle(pi.hThread);
 }
 
 size_t AutoUpdater::_WriteCallback(void *contents, size_t size, size_t nmemb, void *userp)
@@ -518,4 +579,68 @@ void AutoUpdater::_SetDirs(const char* process_location)
 	// Sets m_downloadFILE to download directory appending download name.
 	strncat_s(m_downloadFILE, m_downloadDIR, sizeof(m_downloadFILE));
 	strncat_s(m_downloadFILE, m_downloadNAME, sizeof(m_downloadFILE));
+}
+
+int AutoUpdater::_RenameAndCopy(const fs::path & path)
+{
+	// Chicken and egg.
+	std::error_code ec;
+	fs::path process(path);
+	fs::path processR = process;
+	processR += ".bak";
+	fs::rename(process, processR, ec);
+	fs::copy(processR, process, ec);
+	m_pathsToDelete.push_back(processR.string());
+	if (ec.value() != 0)
+	{
+		std::cout << ec.message() << std::endl;
+		return I_FS_RENAME_ERROR;
+	}
+	return I_SUCCESS;
+}
+
+int AutoUpdater::_RenameAndCopy(char * path)
+{
+	// Chicken and egg.
+	std::error_code ec;
+	fs::path process(path);
+	fs::path processR = process;
+	processR += ".bak";
+	fs::rename(process, processR, ec);
+	fs::copy(processR, process, ec);
+	m_pathsToDelete.push_back(processR.string());
+	if (ec.value() != 0)
+	{
+		std::cout << ec.message() << std::endl;
+		return I_FS_RENAME_ERROR;
+	}
+	return I_SUCCESS;
+}
+
+void AutoUpdater::debug_perms(fs::perms p)
+{
+	std::cout << ((p & fs::perms::owner_read) != fs::perms::none ? "r" : "-")
+		<< ((p & fs::perms::owner_write) != fs::perms::none ? "w" : "-")
+		<< ((p & fs::perms::owner_exec) != fs::perms::none ? "x" : "-")
+		<< ((p & fs::perms::group_read) != fs::perms::none ? "r" : "-")
+		<< ((p & fs::perms::group_write) != fs::perms::none ? "w" : "-")
+		<< ((p & fs::perms::group_exec) != fs::perms::none ? "x" : "-")
+		<< ((p & fs::perms::others_read) != fs::perms::none ? "r" : "-")
+		<< ((p & fs::perms::others_write) != fs::perms::none ? "w" : "-")
+		<< ((p & fs::perms::others_exec) != fs::perms::none ? "x" : "-")
+		<< '\n';
+}
+
+void AutoUpdater::debug_status(const fs::path & p, fs::file_status s)
+{
+	std::cout << p;
+	// alternative: switch(s.type()) { case fs::file_type::regular: ...}
+	if (fs::is_regular_file(s)) std::cout << " is a regular file\n";
+	if (fs::is_directory(s)) std::cout << " is a directory\n";
+	if (fs::is_block_file(s)) std::cout << " is a block device\n";
+	if (fs::is_character_file(s)) std::cout << " is a character device\n";
+	if (fs::is_fifo(s)) std::cout << " is a named IPC pipe\n";
+	if (fs::is_socket(s)) std::cout << " is a named IPC socket\n";
+	if (fs::is_symlink(s)) std::cout << " is a symlink\n";
+	if (!fs::exists(s)) std::cout << " does not exist\n";
 }

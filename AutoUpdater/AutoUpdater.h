@@ -1,6 +1,8 @@
 #pragma once
 #include <string>
+#include <vector>
 #include <iostream>
+#include <windows.h>
 #include <exception>
 #include <experimental/filesystem>
 
@@ -53,9 +55,15 @@
 #define I_SUCCESS					(UPDATER_SUCCESS)
 #define I_ERROR						(UPDATER_ERROR)
 #define I_FAIL_TO_DELETE			(13)
-#define I_FILESYSTEM_RENAME_ERROR	(23)
-#define I_FILESYSTEM_COPY_ERROR		(33)
-#define I_FILESYSTEM_REMOVE_ERROR	(43)
+#define I_FS_RENAME_ERROR			(23)
+#define I_FS_RENAME_DLL_ERROR		(53)
+#define I_FS_COPY_ERROR				(33)
+#define I_FS_REMOVE_ERROR			(43)
+
+// 4 Cleanup Errors. - Handles cleanup() function
+#define CU_SUCCESS					(UPDATER_SUCCESS)
+#define CU_FS_REMOVE_ERROR			(14)
+#define CU_CREATE_PROCESS_ERROR		(24)
 
 namespace fs = std::experimental::filesystem;
 using std::string;
@@ -205,18 +213,26 @@ public:
 	int downloadUpdate();
 	int unZipUpdate();
 	int installUpdate();
+	int cleanup();
 
 private:
+	void _StartupProcess(LPCTSTR lpApplicationName, errno_t &err);
 	static size_t _WriteCallback(void *contents, size_t size, size_t nmemb, void *userp);
 	static size_t _WriteData(void *ptr, size_t size, size_t nmemb, FILE *stream);
 	static int _DownloadProgress(void* ptr, double total_download, double downloaded, double total_upload, double uploaded);
 	void _SetDirs(const char* process_location = "");
+	int _RenameAndCopy(const fs::path &path);
+	int _RenameAndCopy(char* path);
+	void debug_perms(fs::perms p);
+	void debug_status(const fs::path& p, fs::file_status s);
 
 	errno_t m_error;
 
 protected:
 	Version *m_version;
 	Version *m_newVersion;
+
+	std::vector<string> m_pathsToDelete;
 
 	char m_versionURL[MAX_URL];
 	char m_downloadURL[MAX_URL];
