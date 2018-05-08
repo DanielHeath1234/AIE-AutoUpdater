@@ -22,9 +22,9 @@ AutoUpdater::AutoUpdater(Version cur_version, const string version_url, const st
 	if (m_version->getError() != VN_SUCCESS)
 		m_error = m_version->getError();
 
-	// Runs the updater upon construction.
+	// Runs the updater upon construction, checks for errors and outputs flags.
 	errno_t error = run();
-	if (error != UPDATER_SUCCESS)
+	if (error != UPDATER_SUCCESS || _OutFlags())
 	{
 		m_error = error;
 
@@ -402,15 +402,30 @@ int AutoUpdater::installUpdate()
 		{
 			if (fs::exists(p.path(), ec)) // If it already exists. Overwrite it.
 			{
-				if (p.path().extension() == ".dll") // Checks if file is a dll (may be in use) 
+				if (p.path().extension() == ".dll") // Checks if file is a dll (if in use, cannot be updated)
 				{
-					std::cout << "File at path: " << path << " is a dll and exists. " << p.path().filename() << " will be renamed and copied." << std::endl;
-					if (_RenameAndCopy(p.path()) != 0)
-						return I_FS_RENAME_DLL_ERROR;
-				}
+					// Make this file get flagged for update if there is a difference 
+					// between update and install as well as if overwrite was not successful.
+					if (fs::file_size(p.path()) != fs::file_size(installPath)) // Checks for size difference in files.
+					{
+						std::cout << "Attempting to overwrite dll file " << path << std::endl;
+						fs::copy(p.path(), installPath, fs::copy_options::overwrite_existing, ec);
+						if (ec.value() != 0)
+						{
+							// Failure to write dll. Push back into flags.
+							std::cout << "Failed to overwrite file " << path << ". Failure will be flagged." << std::endl;
+							m_flags.push_back(new Flag(p.path(), ec.message()));
+							continue;
+						}
 
-				std::cout << "Overwriting File: " << path << std::endl;
-				fs::copy(p.path(), installPath, fs::copy_options::overwrite_existing, ec);
+						std::cout << "Overwrite successful on file " << path << std::endl;
+					}
+				}
+				else // File isn't a dll.
+				{
+					std::cout << "Overwriting File: " << path << std::endl;
+					fs::copy(p.path(), installPath, fs::copy_options::overwrite_existing, ec);
+				}
 			}
 			else
 			{
@@ -421,6 +436,7 @@ int AutoUpdater::installUpdate()
 
 		if (ec.value() != 0)
 		{
+			// TODO: Debugging functions.
 			debug_status(p.path(), fs::status(p.path()));
 			debug_perms(fs::status(p.path()).permissions());
 			std::cout << "Error Message: " << ec.message() << std::endl;
@@ -615,6 +631,19 @@ int AutoUpdater::_RenameAndCopy(char * path)
 		return I_FS_RENAME_ERROR;
 	}
 	return I_SUCCESS;
+}
+
+bool AutoUpdater::_OutFlags()
+{
+	if (m_flags.empty())
+		return false;
+
+	for (auto iter = m_flags.begin(); iter != m_flags.end(); iter++)
+	{
+		std::cout << "FLAG: File Path: " << (*iter)->getFilePath() << " ||" << std::endl
+			<< "Error Message : " << (*iter)->getMessage() << std::endl;
+	}
+	return true;	
 }
 
 void AutoUpdater::debug_perms(fs::perms p)

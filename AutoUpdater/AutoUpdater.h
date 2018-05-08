@@ -69,6 +69,35 @@ namespace fs = std::experimental::filesystem;
 using std::string;
 using std::exception;
 
+struct Flag
+{
+public:
+
+	Flag(fs::path path, const string message) 
+		: m_filePath(path), m_message(message)
+	{
+
+	}
+	~Flag() 
+	{
+
+	}
+
+	inline const fs::path getFilePath() const { return m_filePath; }
+	inline const fs::path getFileName() const { return m_filePath.filename(); }
+	inline const fs::path getFileExtension() const { return m_filePath.extension(); }
+	inline const string getMessage() const { return m_message; }
+
+	inline void setFilePath(const fs::path path) { m_filePath = path; }
+	inline void setMessage(const string message) { m_message = message; }
+
+private:
+
+	fs::path m_filePath;
+	string m_message;
+
+};
+
 // Version type for handling revision numbers.
 struct Version
 {
@@ -223,6 +252,7 @@ private:
 	void _SetDirs(const char* process_location = "");
 	int _RenameAndCopy(const fs::path &path);
 	int _RenameAndCopy(char* path);
+	bool _OutFlags();
 	void debug_perms(fs::perms p);
 	void debug_status(const fs::path& p, fs::file_status s);
 
@@ -233,6 +263,7 @@ protected:
 	Version *m_newVersion;
 
 	std::vector<string> m_pathsToDelete;
+	std::vector<Flag*>	m_flags;
 
 	char m_versionURL[MAX_URL];
 	char m_downloadURL[MAX_URL];
