@@ -445,8 +445,8 @@ int AutoUpdater::cleanup()
 	// TODO: Open new precess, close old process. Delete .bak files.
 	errno_t value;
 	_StartupProcess(m_exeLOC, value); // TODO: Make sure value actually changes in _StartupProcess.
-	if (value == 0) // If CreateProcess() succeeds, return is nonzero. Fail is zero.
-		return value;
+	if (value == 0) // CreateProcess() success return is nonzero. Failure return is zero.
+		return CU_CREATE_PROCESS_ERROR;
 
 	// Delete renamed files and clear list.
 	/*std::error_code ec;
