@@ -52,6 +52,7 @@
 // 3 Installing Update Errors. - Handles installUpdate() function
 #define I_SUCCESS					(UPDATER_SUCCESS)
 #define I_ERROR						(UPDATER_ERROR)
+#define I_FAIL_TO_DELETE			(13)
 
 namespace fs = std::experimental::filesystem;
 using std::string;
@@ -190,7 +191,7 @@ private:
 class AutoUpdater
 {
 public:
-	AutoUpdater(Version cur_version, const string version_url, const string download_url, const string download_path = "");
+	AutoUpdater(Version cur_version, const string version_url, const string download_url, const char* process_location = "");
 	~AutoUpdater();
 
 	int run();
@@ -206,8 +207,9 @@ private:
 	static size_t _WriteCallback(void *contents, size_t size, size_t nmemb, void *userp);
 	static size_t _WriteData(void *ptr, size_t size, size_t nmemb, FILE *stream);
 	static int _DownloadProgress(void* ptr, double total_download, double downloaded, double total_upload, double uploaded);
-	void _SetDirs();
+	void _SetDirs(const char* process_location = "");
 	bool _PathExists(const fs::path& p, fs::file_status s = fs::file_status{});
+	void _RenameProcess();
 
 	errno_t m_error;
 

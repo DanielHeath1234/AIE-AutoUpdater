@@ -7,19 +7,17 @@
 #include <algorithm>
 #include <iomanip>
 
-//namespace fs = std::experimental::filesystem;
 using std::string;
 
-AutoUpdater::AutoUpdater(Version cur_version, const string version_url, const string download_url, const string download_path)
+AutoUpdater::AutoUpdater(Version cur_version, const string version_url, const string download_url, const char* process_location)
 	: m_version(&cur_version), m_error(UPDATER_SUCCESS)
 {
 	// Copies const string into char array for use in CURL.
 	strncpy_s(m_versionURL, (char*)version_url.c_str(), sizeof(m_versionURL));
 	strncpy_s(m_downloadURL, (char*)download_url.c_str(), sizeof(m_downloadURL));
 
-	// Get current process path if download_path is default.
-	(download_path == "") ? _SetDirs() :
-		strncpy_s(m_directory, (char*)download_path.c_str(), sizeof(m_directory));
+	// Set directories based off of the main process's location.
+	_SetDirs(process_location);
 
 	// Error checks on version.
 	if (m_version->getError() != VN_SUCCESS)
@@ -73,12 +71,15 @@ int AutoUpdater::run()
 		value = unZipUpdate();
 		if (value != UZ_SUCCESS)
 			return value;
+
+		//**  RENAME PROCESS **// 
+		//** COPY NEW FILES AND OVERWRITE OLD **//
 		
 		// Install the update.
 		std::cout << std::endl << "Installing update please wait..." << std::endl << std::endl;
-		value = installUpdate();
+		/*value = installUpdate();
 		if (value != I_SUCCESS)
-			return value;
+			return value;*/
 
 		// Update was successful.
 		return UPDATER_SUCCESS;
@@ -89,6 +90,12 @@ int AutoUpdater::run()
 		break;
 
 	case 's': // Debug to skip downloading update to test installing. TODO: Remove this with release.
+		// Unzip update.
+		std::cout << std::endl << "Unzipping update please wait..." << std::endl << std::endl;
+		value = unZipUpdate();
+		if (value != UZ_SUCCESS)
+			return value;
+
 		// Install the update.
 		std::cout << std::endl << "Installing update please wait..." << std::endl << std::endl;
 		value = installUpdate();
@@ -245,6 +252,10 @@ int AutoUpdater::unZipUpdate()
 	// Buffer to hold data read from the zip file.
 	char *read_buffer[READ_SIZE];
 
+	// TODO: Install update. Change process and write over existing files / create new ones.
+	// Renames current process so as it can be written over.
+	//_RenameProcess();
+
 	// Loop to extract all files
 	uLong i;
 	for (i = 0; i < (*global_info).number_entry; ++i)
@@ -354,19 +365,24 @@ int AutoUpdater::unZipUpdate()
 int AutoUpdater::installUpdate()
 {
 	// TODO: Finish Installing Update.
-	fs::path process(m_exeLOC);
-	fs::path processR = process;
-	processR += ".bak";
+	// TODO: Unzip update directly into install folder to save further folder manipulation.
 
-	// Rename process.
-	fs::rename(process, processR);
+	// Rename Process.
+	_RenameProcess();
 
 	// Install update. (don't forget .exe)
+	fs::path update = m_extractedDIR;
+	string dir(m_directory);
+	std::size_t found = dir.find_last_of("/\\");
+	dir = dir.substr(0, found);
+	fs::path install = dir;
 
-	// Delete update download directory.
+	fs::copy(update, install, fs::copy_options::recursive);
+
+	// Delete update's temp download directory.
 	fs::remove_all(m_downloadDIR);
 
-	// Open new process.
+	// Open new precess, close old process.
 
 	return I_SUCCESS;
 }
@@ -426,11 +442,13 @@ int AutoUpdater::_DownloadProgress(void * ptr, double total_download, double dow
 	return 0;
 }
 
-void AutoUpdater::_SetDirs()
+void AutoUpdater::_SetDirs(const char* process_location)
 {
 	// Get current process's path and set m_exeLOC to it.
-	GetModuleFileName(NULL, m_exeLOC, sizeof(m_directory));
-
+	(process_location == "") ?
+		GetModuleFileName(NULL, m_exeLOC, sizeof(m_directory)) :
+		strncpy_s(m_exeLOC, process_location, sizeof(m_exeLOC));
+	
 	// Remove process name and extension from m_exeLOC and
 	// set m_directory to folder containing process.
 	string dir(m_exeLOC);
@@ -461,4 +479,13 @@ bool AutoUpdater::_PathExists(const fs::path & p, fs::file_status s)
 		return true;
 	else
 		return false;
+}
+
+void AutoUpdater::_RenameProcess()
+{
+	// Rename process.
+	fs::path process(m_exeLOC);
+	fs::path processR = process;
+	processR += ".bak";
+	fs::rename(process, processR);
 }
