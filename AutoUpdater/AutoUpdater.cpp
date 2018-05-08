@@ -72,14 +72,11 @@ int AutoUpdater::run()
 		if (value != UZ_SUCCESS)
 			return value;
 
-		//**  RENAME PROCESS **// 
-		//** COPY NEW FILES AND OVERWRITE OLD **//
-		
 		// Install the update.
 		std::cout << std::endl << "Installing update please wait..." << std::endl << std::endl;
-		/*value = installUpdate();
+		value = installUpdate();
 		if (value != I_SUCCESS)
-			return value;*/
+			return value;
 
 		// Update was successful.
 		return UPDATER_SUCCESS;
@@ -184,7 +181,7 @@ int AutoUpdater::downloadUpdate()
 	if (curl) 
 	{
 		// Checks if download directory exists and if not, creates it.
-		if (_PathExists(m_downloadDIR))
+		if (!fs::exists(m_downloadDIR))
 		{
 			printf(m_downloadDIR, "Download path: %s does not exist. Creating directory now.");
 			fs::create_directory(m_downloadDIR);
@@ -366,9 +363,18 @@ int AutoUpdater::installUpdate()
 {
 	// TODO: Finish Installing Update.
 	// TODO: Unzip update directly into install folder to save further folder manipulation.
+	std::error_code ec;
 
-	// Rename Process.
-	_RenameProcess();
+	// Rename process.
+	fs::path process(m_exeLOC);
+	fs::path processR = process;
+	processR += ".bak";
+	fs::rename(process, processR, ec);
+	if (ec.value() != 0)
+	{
+		std::cout << ec.message() << std::endl;
+		return I_FILESYSTEM_RENAME_ERROR;
+	}
 
 	// Install update. (don't forget .exe)
 	fs::path update = m_extractedDIR;
@@ -377,10 +383,51 @@ int AutoUpdater::installUpdate()
 	dir = dir.substr(0, found);
 	fs::path install = dir;
 
-	fs::copy(update, install, fs::copy_options::recursive);
+	for (auto& p : fs::recursive_directory_iterator(update))
+	{
+		string path(p.path().string());
+		path.erase(0, strnlen_s(m_extractedDIR, sizeof(m_extractedDIR)));
+
+		string installPath(install.string());
+		installPath += "\\";
+		installPath += path;
+
+		if (fs::is_directory(p.path())) // Directory
+		{
+			if (fs::exists(p.path(), ec))
+			{
+				std::cout << "dir exists: " << path << std::endl;
+				//fs::create_directory(installPath, ec);
+			}
+		}
+		else // File
+		{
+			if (fs::exists(p.path(), ec)) // If it already exists, overwrite.
+			{
+				//fs::copy(p.path(), installPath, fs::copy_options::overwrite_existing, ec);
+				std::cout << "file exists: " << path << std::endl;
+			}
+			else
+			{
+				std::cout << "file: " << path << std::endl;
+				//fs::copy(p.path(), installPath, fs::copy_options::none, ec);
+			}
+		}
+
+		if (ec.value() != 0)
+		{
+			std::cout << ec.message() << std::endl;
+			return I_FILESYSTEM_COPY_ERROR;
+		}
+	}
 
 	// Delete update's temp download directory.
-	fs::remove_all(m_downloadDIR);
+	fs::remove_all(m_downloadDIR, ec);
+	if (ec.value() != 0)
+	{
+		std::cout << ec.message() << std::endl;
+		return I_FILESYSTEM_REMOVE_ERROR;
+	}
 
 	// Open new precess, close old process.
 
@@ -471,21 +518,4 @@ void AutoUpdater::_SetDirs(const char* process_location)
 	// Sets m_downloadFILE to download directory appending download name.
 	strncat_s(m_downloadFILE, m_downloadDIR, sizeof(m_downloadFILE));
 	strncat_s(m_downloadFILE, m_downloadNAME, sizeof(m_downloadFILE));
-}
-
-bool AutoUpdater::_PathExists(const fs::path & p, fs::file_status s)
-{
-	if (fs::status_known(s) ? fs::exists(s) : fs::exists(p))
-		return true;
-	else
-		return false;
-}
-
-void AutoUpdater::_RenameProcess()
-{
-	// Rename process.
-	fs::path process(m_exeLOC);
-	fs::path processR = process;
-	processR += ".bak";
-	fs::rename(process, processR);
 }

@@ -53,6 +53,9 @@
 #define I_SUCCESS					(UPDATER_SUCCESS)
 #define I_ERROR						(UPDATER_ERROR)
 #define I_FAIL_TO_DELETE			(13)
+#define I_FILESYSTEM_RENAME_ERROR	(23)
+#define I_FILESYSTEM_COPY_ERROR		(33)
+#define I_FILESYSTEM_REMOVE_ERROR	(43)
 
 namespace fs = std::experimental::filesystem;
 using std::string;
@@ -208,8 +211,6 @@ private:
 	static size_t _WriteData(void *ptr, size_t size, size_t nmemb, FILE *stream);
 	static int _DownloadProgress(void* ptr, double total_download, double downloaded, double total_upload, double uploaded);
 	void _SetDirs(const char* process_location = "");
-	bool _PathExists(const fs::path& p, fs::file_status s = fs::file_status{});
-	void _RenameProcess();
 
 	errno_t m_error;
 
