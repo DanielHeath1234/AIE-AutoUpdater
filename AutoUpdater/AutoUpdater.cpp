@@ -3,6 +3,7 @@
 
 #include <curl/curl.h>
 #include <direct.h>
+#include <windows.h>
 #include <algorithm>
 #include <iomanip>
 
@@ -20,13 +21,13 @@ AutoUpdater::AutoUpdater(Version cur_version, const string version_url, const st
 
 	// Error checks on initilisation version.
 	if (m_version->getError() != VN_SUCCESS)
-		m_flags.push_back(new Flag("Version Number Error.", m_version->getError()));
+		m_flags->push_back(new Flag((string*)"Version Number Error.", m_version->getError()));
 
 	// Runs the updater upon construction, checks for errors and outputs flags.
 	errno_t error = run();
 	if (error != UPDATER_SUCCESS)
 	{
-		m_flags.push_back(new Flag("AutoUpdate Error", error));
+		m_flags->push_back(new Flag((string*)"AutoUpdate Error", error));
 	}
 
 	_OutFlags();
@@ -120,7 +121,7 @@ int AutoUpdater::downloadVersionNumber()
 		res = curl_easy_perform(curl);
 		if (res != CURLE_OK)
 		{
-			m_flags.push_back(new Flag(curl_easy_strerror(res), VN_CURL_ERROR));
+			m_flags->push_back(new Flag((string*)curl_easy_strerror(res), VN_CURL_ERROR));
 			return VN_CURL_ERROR;
 		}
 
@@ -202,7 +203,7 @@ int AutoUpdater::downloadUpdate()
 		res = curl_easy_perform(curl);
 		if (res != CURLE_OK) 
 		{ 
-			m_flags.push_back(new Flag(curl_easy_strerror(res), DU_CURL_ERROR));
+			m_flags->push_back(new Flag((string*)curl_easy_strerror(res), DU_CURL_ERROR));
 			return DU_CURL_ERROR; 
 		}
 
@@ -403,7 +404,7 @@ int AutoUpdater::installUpdate()
 						{
 							// Failure to overwrite dll.
 							std::cout << "Failed to overwrite file " << path << std::endl;
-							m_flags.push_back(new Flag(p.path(), ec.message(), I_FS_DLL_ERROR));
+							m_flags->push_back(new Flag(&p.path().string(), &ec.message(), I_FS_DLL_ERROR));
 							continue;
 						}
 
@@ -429,7 +430,7 @@ int AutoUpdater::installUpdate()
 
 		if (ec.value() != 0)
 		{
-			m_flags.push_back(new Flag(p.path(), ec.message(), I_FS_COPY_ERROR));
+			m_flags->push_back(new Flag(&(p).path().string(), &(ec).message(), I_FS_COPY_ERROR));
 			return I_FS_COPY_ERROR;
 		}
 	}
@@ -438,7 +439,7 @@ int AutoUpdater::installUpdate()
 	fs::remove_all(m_downloadDIR, ec);
 	if (ec.value() != 0)
 	{
-		m_flags.push_back(new Flag(ec.message(), I_FS_REMOVE_ERROR));
+		m_flags->push_back(new Flag(&ec.message(), I_FS_REMOVE_ERROR));
 		return I_FS_REMOVE_ERROR;
 	}
 
@@ -447,11 +448,9 @@ int AutoUpdater::installUpdate()
 }
 
 int AutoUpdater::cleanup()
-{
-	// TODO: Finish Cleanup.
-	
+{	
 	// Open new process.
-	int value = (int)ShellExecute(NULL, NULL, m_exeLOC, NULL, NULL, SW_SHOW);
+	/*int value = (int)ShellExecute(NULL, NULL, (LPWSTR)m_exeLOC, NULL, NULL, SW_SHOW);
 	if (value < 32) // ShellExecute() success return is > 32.
 	{
 		m_flags.push_back(new Flag(std::to_string(value), CU_CREATE_PROCESS_ERROR));
@@ -494,51 +493,11 @@ size_t AutoUpdater::_WriteData(void * ptr, size_t size, size_t nmemb, FILE * str
 	return written * size;
 }
 
-int AutoUpdater::_DownloadProgress(void * ptr, double total_download, double downloaded, double total_upload, double uploaded)
-{
-	// Ensure that the file to be downloaded is not empty
-	// because that would cause a division by zero error later on.
-	if (total_download <= 0.0) {
-		return 0;
-	}
-
-	// How wide the progress meter will be.
-	int totalDots = 40;
-	double fractiondownloaded = downloaded / total_download;
-
-	// Part of the progressmeter that's already "full".
-	int dots = (int)round(fractiondownloaded) * totalDots;
-
-	// Create the "meter".
-	int ii = 0;
-	printf("%3.0f%% [", fractiondownloaded * 100);
-	//std::cout << fractiondownloaded * 100 << "[";
-
-	// Part  that's full already.
-	for (; ii < dots; ii++) {
-		printf("=");
-		//std::cout << "=";
-	}
-	// Remaining part (spaces).
-	for (; ii < totalDots; ii++) {
-		printf(" ");
-		//std::cout << " ";
-	}
-
-	// Back to line begin - fflush to avoid output buffering problems!
-	printf("]\r");
-	//std::cout << "]";
-	fflush(stdout);
-
-	// if you don't return 0, the transfer will be aborted - see the documentation.
-	return 0;
-}
-
 void AutoUpdater::_SetDirs(const char* process_location)
 {
 	// Get current process's path and set m_exeLOC to it.
 	(process_location == "") ?
-		GetModuleFileName(NULL, m_exeLOC, sizeof(m_directory)) :
+		GetModuleFileName(NULL, (LPSTR)m_exeLOC, sizeof(m_directory)) :
 		strncpy_s(m_exeLOC, process_location, sizeof(m_exeLOC));
 	
 	// Remove process name and extension from m_exeLOC and
@@ -574,10 +533,10 @@ int AutoUpdater::_RenameAndCopy(const char* path)
 	processR += ".bak";
 	fs::rename(process, processR, ec);
 	fs::copy(processR, process, ec);
-	m_pathsToDelete.push_back(processR.string());
+	m_pathsToDelete->push_back(processR.string());
 	if (ec.value() != 0)
 	{
-		m_flags.push_back(new Flag(ec.message(), I_FS_REMOVE_ERROR));
+		m_flags->push_back(new Flag(&ec.message(), I_FS_REMOVE_ERROR));
 		return I_FS_RENAME_ERROR;
 	}
 	return I_SUCCESS;
@@ -585,10 +544,13 @@ int AutoUpdater::_RenameAndCopy(const char* path)
 
 void AutoUpdater::_OutFlags()
 {
-	if (m_flags.empty())
+	if (m_flags == nullptr)
 		return;
 
-	for (auto iter = m_flags.begin(); iter != m_flags.end(); iter++)
+	if (m_flags->empty())
+		return;
+
+	for (auto iter = m_flags->begin(); iter != m_flags->end(); iter++)
 	{
 		if ((*iter)->hasPath())
 		{

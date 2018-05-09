@@ -1,8 +1,9 @@
 #pragma once
+
 #include <string>
 #include <vector>
 #include <iostream>
-#include <windows.h>
+
 #include <exception>
 #include <experimental/filesystem>
 
@@ -73,47 +74,46 @@ struct Flag
 {
 public:
 
-	Flag(fs::path path, const string message, int updater_error = UPDATER_ERROR) 
-		: m_filePath(path), m_message(message), m_error(updater_error)
+	Flag(fs::path* path, const string* message, int updater_error = UPDATER_ERROR)
+		: m_filePath(path), m_message(message), m_error(updater_error), m_hasPath(true)
 	{
 
 	}
-	Flag(string path, const string message, int updater_error = UPDATER_ERROR)
-		: m_filePath(path), m_message(message), m_error(updater_error)
+	Flag(string* path, const string* message, int updater_error = UPDATER_ERROR)
+		: m_filePath((fs::path*)path), m_message(message), m_error(updater_error), m_hasPath(true)
 	{
-
+		
 	}
-	Flag(const string message, int updater_error)
-		: m_message(message), m_error(updater_error)
+	Flag(const string* message, int updater_error)
+		: m_message(message), m_error(updater_error), m_hasPath(false)
 	{
-		m_hasPath = false;
+		
 	}
 	~Flag() 
 	{
 
 	}
 
-	inline const fs::path getFilePath() const { return m_filePath; }
-	inline const fs::path getFileName() const { return m_filePath.filename(); }
-	inline const fs::path getFileExtension() const { return m_filePath.extension(); }
-	inline const string getMessage() const { return m_message; }
-	inline const int getError() const { return m_error; }
-	inline const bool hasPath() const { return m_hasPath; }
+	inline const fs::path *getFilePath() const { return m_filePath; }
+	inline fs::path getFileName() { return m_filePath->filename(); }
+	inline fs::path getFileExtension() { return m_filePath->extension(); }
+	inline const string *getMessage() const { return m_message; }
+	inline int getError() { return m_error; }
+	inline bool hasPath() { return m_hasPath; }
 
-	inline void setFilePath(const fs::path path) { m_filePath = path; }
-	inline void setMessage(const string message) { m_message = message; }
-	inline void setError(const int error) { m_error = error; }
+	inline void setFilePath(fs::path *path) { m_filePath = path; }
+	inline void setMessage(string *message) { m_message = message; }
+	inline void setError(int error) { m_error = error; }
 
 private:
 
-	fs::path m_filePath;
-	string m_message;
+	fs::path *m_filePath;
+	const string *m_message;
 	int m_error;
 	bool m_hasPath = true;
 
 };
 
-// Version type for handling revision numbers.
 struct Version
 {
 public:
@@ -261,7 +261,6 @@ public:
 private:
 	static size_t _WriteCallback(void *contents, size_t size, size_t nmemb, void *userp);
 	static size_t _WriteData(void *ptr, size_t size, size_t nmemb, FILE *stream);
-	static int _DownloadProgress(void* ptr, double total_download, double downloaded, double total_upload, double uploaded);
 	void _SetDirs(const char* process_location = "");
 	int _RenameAndCopy(const char* path);
 	void _OutFlags();
@@ -270,8 +269,8 @@ protected:
 	Version *m_version;
 	Version *m_newVersion;
 
-	std::vector<string> m_pathsToDelete;
-	std::vector<Flag*>	m_flags;
+	std::vector<string> *m_pathsToDelete = nullptr;
+	std::vector<Flag*>	*m_flags = nullptr;
 
 	char m_versionURL[MAX_URL];
 	char m_downloadURL[MAX_URL];
