@@ -400,6 +400,11 @@ int AutoUpdater::installUpdate()
 		}
 		else // File
 		{
+			// Do not overwrite AutoUpdater source. Avoid overwriting with old code.
+			if (p.path().filename() == "AutoUpdater.cpp" || p.path().filename() == "AutoUpdater.h")
+			{
+				continue;
+			}
 			if (fs::exists(p.path(), ec)) // If it already exists. Overwrite it.
 			{
 				if (p.path().extension() == ".dll") // Checks if file is a dll (if in use, cannot be updated)
