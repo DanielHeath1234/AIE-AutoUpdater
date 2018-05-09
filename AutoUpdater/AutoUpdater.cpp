@@ -9,7 +9,7 @@
 using std::string;
 
 AutoUpdater::AutoUpdater(Version cur_version, const string version_url, const string download_url, const char* process_location)
-	: m_version(&cur_version), m_error(UPDATER_SUCCESS)
+	: m_version(&cur_version)
 {
 	// Copies const string into char array for use in CURL.
 	strncpy_s(m_versionURL, (char*)version_url.c_str(), sizeof(m_versionURL));
@@ -18,19 +18,18 @@ AutoUpdater::AutoUpdater(Version cur_version, const string version_url, const st
 	// Set directories based off of the main process's location.
 	_SetDirs(process_location);
 
-	// Error checks on version.
+	// Error checks on initilisation version.
 	if (m_version->getError() != VN_SUCCESS)
-		m_error = m_version->getError();
+		m_flags.push_back(new Flag("Version Number Error.", m_version->getError()));
 
 	// Runs the updater upon construction, checks for errors and outputs flags.
 	errno_t error = run();
-	if (error != UPDATER_SUCCESS || _OutFlags())
+	if (error != UPDATER_SUCCESS)
 	{
-		m_error = error;
-
-		// TODO: Debugging purposes to be able to read console output before termination.
-		system("pause");
+		m_flags.push_back(new Flag("AutoUpdate Error", error));
 	}
+
+	_OutFlags();
 }
 
 AutoUpdater::~AutoUpdater()
@@ -50,9 +49,8 @@ int AutoUpdater::run()
 		return value;
 
 	// Checks for update.
-	value = checkForUpdate();
-	if (value != UPDATER_UPDATE_AVAILABLE)
-		return value;
+	if (!checkForUpdate())
+		return UPDATER_NO_UPDATE;
 
 	char input;
 	std::cout << "Would you like to update? (y,n)" << std::endl;
@@ -96,30 +94,12 @@ int AutoUpdater::run()
 		return UPDATER_NO_UPDATE;
 		break;
 
-	case 's': // Debug to skip downloading update to test installing. TODO: Remove this with release.
-		// Need to run unzip to set m_extractedDIR as installation depends on it.
-		// Unzip update.
-		std::cout << std::endl << "Unzipping update please wait..." << std::endl << std::endl;
-		value = unZipUpdate();
-		if (value != UZ_SUCCESS)
-			return value;
-
-		// Install the update.
-		std::cout << std::endl << "Installing update please wait..." << std::endl << std::endl;
-		value = installUpdate();
-		if (value != I_SUCCESS)
-			return value;
-
-		return UPDATER_SUCCESS;
-		break;
-
 	default:
 		return UPDATER_INVALID_INPUT;
 		break;
 	}
 
-	return m_error;
-	system("pause");
+	return UPDATER_ERROR;
 }
 
 int AutoUpdater::downloadVersionNumber()
@@ -140,7 +120,7 @@ int AutoUpdater::downloadVersionNumber()
 		res = curl_easy_perform(curl);
 		if (res != CURLE_OK)
 		{
-			std::cout << curl_easy_strerror(res) << std::endl; 
+			m_flags.push_back(new Flag(curl_easy_strerror(res), VN_CURL_ERROR));
 			return VN_CURL_ERROR;
 		}
 
@@ -162,23 +142,20 @@ int AutoUpdater::downloadVersionNumber()
 	return VN_CURL_ERROR;
 }
 
-int AutoUpdater::checkForUpdate()
+bool AutoUpdater::checkForUpdate()
 {
 	// Checks if versions are equal.
 	if (m_version->operator>=(*m_newVersion))
 	{
-		// The versions are equal. No Update Available.
-		std::cout << "Your project is up to date." << std::endl << std::endl;
-		// TODO: For showcase purposes.
-			system("pause");
-		return UPDATER_NO_UPDATE;
+		// The versions are equal. No Update Available. Don't bother prompting.
+		return false;
 	}
 
 	// An update is available.
 	std::cout << "An Update is Available." << std::endl
 		<< "Newest Version: " << m_newVersion->getVersionString() << std::endl
 		<< "Current Version: " << m_version->getVersionString() << std::endl << std::endl;
-	return UPDATER_UPDATE_AVAILABLE;
+	return true;
 }
 
 int AutoUpdater::downloadUpdate()
@@ -225,13 +202,13 @@ int AutoUpdater::downloadUpdate()
 		res = curl_easy_perform(curl);
 		if (res != CURLE_OK) 
 		{ 
-			std::cout << curl_easy_strerror(res) << std::endl; 
+			m_flags.push_back(new Flag(curl_easy_strerror(res), DU_CURL_ERROR));
 			return DU_CURL_ERROR; 
 		}
 
 		curl_easy_cleanup(curl);
 		fclose(fp);
-		std::cout << "Download Successful." << std::endl;
+		std::cout << std::endl << "Download Successful." << std::endl;
 		return DU_SUCCESS;
 	}
 	return DU_CURL_ERROR;
@@ -348,7 +325,7 @@ int AutoUpdater::unZipUpdate()
 			{
 				if (err == UNZ_END_OF_LIST_OF_FILE)
 				{
-					std::cout << "UnZip Successful." << std::endl;
+					std::cout << std::endl << "UnZip Successful." << std::endl;
 					unzClose(*zipfile);
 					delete global_info;
 					return UZ_SUCCESS;
@@ -371,7 +348,7 @@ int AutoUpdater::installUpdate()
 	std::error_code ec;
 
 	// Rename process.
-	if (_RenameAndCopy(m_exeLOC) != 0)
+	if (_RenameAndCopy(m_exeLOC) != I_SUCCESS)
 		return I_FS_RENAME_ERROR;
 
 	// Install update. (don't forget .exe)
@@ -397,33 +374,45 @@ int AutoUpdater::installUpdate()
 				std::cout << "Creating Directory: " << path << std::endl;
 				fs::create_directory(installPath, ec);
 			}
+			else
+			{
+				std::cout << "Directory Exists: " << path << std::endl;
+				continue;
+			}
 		}
 		else // File
 		{
-			// Do not overwrite AutoUpdater source. Avoid overwriting with old code.
-			if (p.path().filename() == "AutoUpdater.cpp" || p.path().filename() == "AutoUpdater.h")
+			// TODO: Do not overwrite AutoUpdater source. Avoid overwriting with old code.
+			/*if (p.path().filename() == "AutoUpdater.cpp" || p.path().filename() == "AutoUpdater.h" || p.path().filename() == "Source.cpp")
 			{
 				continue;
-			}
-			if (fs::exists(p.path(), ec)) // If it already exists. Overwrite it.
+			}*/
+			if (fs::exists(p.path(), ec)) // If file already exists. Overwrite it.
 			{
 				if (p.path().extension() == ".dll") // Checks if file is a dll (if in use, cannot be updated)
 				{
-					// Make this file get flagged for update if there is a difference 
-					// between update and install as well as if overwrite was not successful.
-					if (fs::file_size(p.path()) != fs::file_size(installPath)) // Checks for size difference in files.
+					// TODO: Check every file for differences. Size, date, checksum, hash.
+					// Attempts update if there is a difference between update and install
+					//  as well as checks for successful overwrite.
+					uintmax_t updateFileSize = fs::file_size(p.path());
+					uintmax_t installFileSize = fs::file_size(installPath);
+					if (updateFileSize != installFileSize) // Checks for size difference in files. 
 					{
 						std::cout << "Attempting to overwrite dll file " << path << std::endl;
 						fs::copy(p.path(), installPath, fs::copy_options::overwrite_existing, ec);
 						if (ec.value() != 0)
 						{
-							// Failure to write dll. Push back into flags.
-							std::cout << "Failed to overwrite file " << path << ". Failure will be flagged." << std::endl;
-							m_flags.push_back(new Flag(p.path(), ec.message()));
+							// Failure to overwrite dll.
+							std::cout << "Failed to overwrite file " << path << std::endl;
+							m_flags.push_back(new Flag(p.path(), ec.message(), I_FS_DLL_ERROR));
 							continue;
 						}
 
 						std::cout << "Overwrite successful on file " << path << std::endl;
+					}
+					else
+					{
+						std::cout << "Skipping overwrite. File sizes are equal. " << path << std::endl;
 					}
 				}
 				else // File isn't a dll.
@@ -441,10 +430,7 @@ int AutoUpdater::installUpdate()
 
 		if (ec.value() != 0)
 		{
-			// TODO: Debugging functions.
-			debug_status(p.path(), fs::status(p.path()));
-			debug_perms(fs::status(p.path()).permissions());
-			std::cout << "Error Message: " << ec.message() << std::endl;
+			m_flags.push_back(new Flag(p.path(), ec.message(), I_FS_COPY_ERROR));
 			return I_FS_COPY_ERROR;
 		}
 	}
@@ -453,67 +439,45 @@ int AutoUpdater::installUpdate()
 	fs::remove_all(m_downloadDIR, ec);
 	if (ec.value() != 0)
 	{
-		std::cout << "Error Message: " << ec.message() << std::endl;
+		m_flags.push_back(new Flag(ec.message(), I_FS_REMOVE_ERROR));
 		return I_FS_REMOVE_ERROR;
 	}
 
-	std::cout << "Install Successful." << std::endl;
+	std::cout << std::endl << "Install Successful." << std::endl;
 	return I_SUCCESS;
 }
 
 int AutoUpdater::cleanup()
 {
-	// TODO: Open new precess, close old process. Delete .bak files.
-	errno_t value;
-	_StartupProcess(m_exeLOC, value); // TODO: Make sure value actually changes in _StartupProcess.
-	if (value == 0) // CreateProcess() success return is nonzero. Failure return is zero.
-		return CU_CREATE_PROCESS_ERROR;
-
-	// Delete renamed files and clear list.
-	/*std::error_code ec;
-	for (auto iter = m_pathsToDelete.begin(); iter != m_pathsToDelete.end(); iter++)
+	// TODO: Finish Cleanup.
+	
+	// Open new process.
+	int value = (int)ShellExecute(NULL, NULL, m_exeLOC, NULL, NULL, SW_SHOW);
+	if (value < 32) // ShellExecute() success return is > 32.
 	{
-		fs::remove((*iter), ec);
-		if (ec.value() != 0)
+		m_flags.push_back(new Flag(std::to_string(value), CU_CREATE_PROCESS_ERROR));
+		return CU_CREATE_PROCESS_ERROR;
+	}
+	
+	// Delete files that weren't in update?
+	// Avoid deleting .git
+
+	// Delete renamed .bak files.
+	/*if (!m_pathsToDelete.empty())
+	{
+		std::error_code ec;
+		for (auto iter = m_pathsToDelete.begin(); iter != m_pathsToDelete.end(); iter++)
 		{
-			std::cout << "Error Message: " << ec.message() << " removing file " << (*iter) << std::endl;
-			return CU_FS_REMOVE_ERROR;
+			fs::remove((*iter), ec);
+			if (ec.value() != 0)
+			{
+				m_flags.push_back(new Flag((*iter), ec.message(), CU_FS_REMOVE_ERROR));
+			}
 		}
 	}*/
 
-	std::cout << "Cleanup Successful." << std::endl;
+	std::cout << std::endl << "Cleanup Successful." << std::endl;
 	return CU_SUCCESS;
-}
-
-void AutoUpdater::_StartupProcess(LPCTSTR lpApplicationName, errno_t &err)
-{
-	// additional information
-		STARTUPINFO si;
-	PROCESS_INFORMATION pi;
-
-	// set the size of the structures
-	ZeroMemory(&si, sizeof(si));
-	si.cb = sizeof(si);
-	si.dwFlags = STARTF_USESHOWWINDOW;
-	si.wShowWindow = FALSE;
-	ZeroMemory(&pi, sizeof(pi));
-
-	// start the program up
-	err = CreateProcess(lpApplicationName,   // the path
-		NULL,        // Command line
-		NULL,           // Process handle not inheritable
-		NULL,           // Thread handle not inheritable
-		FALSE,          // Set handle inheritance to FALSE
-		0,              // No creation flags
-		NULL,           // Use parent's environment block
-		NULL,           // Use parent's starting directory 
-		&si,            // Pointer to STARTUPINFO structure
-		&pi             // Pointer to PROCESS_INFORMATION structure (removed extra parentheses)
-	);
-		
-	// Close process and thread handles. 
-	CloseHandle(pi.hProcess);
-	CloseHandle(pi.hThread);
 }
 
 size_t AutoUpdater::_WriteCallback(void *contents, size_t size, size_t nmemb, void *userp)
@@ -578,6 +542,7 @@ void AutoUpdater::_SetDirs(const char* process_location)
 		GetModuleFileName(NULL, m_exeLOC, sizeof(m_directory)) :
 		strncpy_s(m_exeLOC, process_location, sizeof(m_exeLOC));
 	
+	// TODO: This may not be directory to write over.
 	// Remove process name and extension from m_exeLOC and
 	// set m_directory to folder containing process.
 	string dir(m_exeLOC);
@@ -602,7 +567,7 @@ void AutoUpdater::_SetDirs(const char* process_location)
 	strncat_s(m_downloadFILE, m_downloadNAME, sizeof(m_downloadFILE));
 }
 
-int AutoUpdater::_RenameAndCopy(const fs::path & path)
+int AutoUpdater::_RenameAndCopy(const char* path)
 {
 	// Chicken and egg.
 	std::error_code ec;
@@ -614,67 +579,32 @@ int AutoUpdater::_RenameAndCopy(const fs::path & path)
 	m_pathsToDelete.push_back(processR.string());
 	if (ec.value() != 0)
 	{
-		std::cout << ec.message() << std::endl;
+		m_flags.push_back(new Flag(ec.message(), I_FS_REMOVE_ERROR));
 		return I_FS_RENAME_ERROR;
 	}
 	return I_SUCCESS;
 }
 
-int AutoUpdater::_RenameAndCopy(char * path)
-{
-	// Chicken and egg.
-	std::error_code ec;
-	fs::path process(path);
-	fs::path processR = process;
-	processR += ".bak";
-	fs::rename(process, processR, ec);
-	fs::copy(processR, process, ec);
-	m_pathsToDelete.push_back(processR.string());
-	if (ec.value() != 0)
-	{
-		std::cout << ec.message() << std::endl;
-		return I_FS_RENAME_ERROR;
-	}
-	return I_SUCCESS;
-}
-
-bool AutoUpdater::_OutFlags()
+void AutoUpdater::_OutFlags()
 {
 	if (m_flags.empty())
-		return false;
+		return;
 
 	for (auto iter = m_flags.begin(); iter != m_flags.end(); iter++)
 	{
-		std::cout << "FLAG: File Path: " << (*iter)->getFilePath() << " ||" << std::endl
-			<< "Error Message : " << (*iter)->getMessage() << std::endl;
+		if ((*iter)->hasPath())
+		{
+			std::cout << "ERROR FLAGGED: " << std::endl
+				<< "File Path: " << (*iter)->getFilePath() << std::endl
+				<< "Error Message: " << (*iter)->getMessage() << std::endl
+				<< "Error Code: " << (*iter)->getError() << std::endl;
+		}
+		else
+		{
+			std::cout << "ERROR FLAGGED: " << std::endl
+				<< "Error Message: " << (*iter)->getMessage() << std::endl
+				<< "Error Code: " << (*iter)->getError() << std::endl;
+		}
 	}
-	return true;	
-}
-
-void AutoUpdater::debug_perms(fs::perms p)
-{
-	std::cout << ((p & fs::perms::owner_read) != fs::perms::none ? "r" : "-")
-		<< ((p & fs::perms::owner_write) != fs::perms::none ? "w" : "-")
-		<< ((p & fs::perms::owner_exec) != fs::perms::none ? "x" : "-")
-		<< ((p & fs::perms::group_read) != fs::perms::none ? "r" : "-")
-		<< ((p & fs::perms::group_write) != fs::perms::none ? "w" : "-")
-		<< ((p & fs::perms::group_exec) != fs::perms::none ? "x" : "-")
-		<< ((p & fs::perms::others_read) != fs::perms::none ? "r" : "-")
-		<< ((p & fs::perms::others_write) != fs::perms::none ? "w" : "-")
-		<< ((p & fs::perms::others_exec) != fs::perms::none ? "x" : "-")
-		<< '\n';
-}
-
-void AutoUpdater::debug_status(const fs::path & p, fs::file_status s)
-{
-	std::cout << p;
-	// alternative: switch(s.type()) { case fs::file_type::regular: ...}
-	if (fs::is_regular_file(s)) std::cout << " is a regular file\n";
-	if (fs::is_directory(s)) std::cout << " is a directory\n";
-	if (fs::is_block_file(s)) std::cout << " is a block device\n";
-	if (fs::is_character_file(s)) std::cout << " is a character device\n";
-	if (fs::is_fifo(s)) std::cout << " is a named IPC pipe\n";
-	if (fs::is_socket(s)) std::cout << " is a named IPC socket\n";
-	if (fs::is_symlink(s)) std::cout << " is a symlink\n";
-	if (!fs::exists(s)) std::cout << " does not exist\n";
+	system("pause");
 }

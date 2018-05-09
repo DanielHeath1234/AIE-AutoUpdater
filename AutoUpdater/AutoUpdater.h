@@ -56,7 +56,7 @@
 #define I_ERROR						(UPDATER_ERROR)
 #define I_FAIL_TO_DELETE			(13)
 #define I_FS_RENAME_ERROR			(23)
-#define I_FS_RENAME_DLL_ERROR		(53)
+#define I_FS_DLL_ERROR				(53)
 #define I_FS_COPY_ERROR				(33)
 #define I_FS_REMOVE_ERROR			(43)
 
@@ -73,10 +73,20 @@ struct Flag
 {
 public:
 
-	Flag(fs::path path, const string message) 
-		: m_filePath(path), m_message(message)
+	Flag(fs::path path, const string message, int updater_error = UPDATER_ERROR) 
+		: m_filePath(path), m_message(message), m_error(updater_error)
 	{
 
+	}
+	Flag(string path, const string message, int updater_error = UPDATER_ERROR)
+		: m_filePath(path), m_message(message), m_error(updater_error)
+	{
+
+	}
+	Flag(const string message, int updater_error)
+		: m_message(message), m_error(updater_error)
+	{
+		m_hasPath = false;
 	}
 	~Flag() 
 	{
@@ -87,14 +97,19 @@ public:
 	inline const fs::path getFileName() const { return m_filePath.filename(); }
 	inline const fs::path getFileExtension() const { return m_filePath.extension(); }
 	inline const string getMessage() const { return m_message; }
+	inline const int getError() const { return m_error; }
+	inline const bool hasPath() const { return m_hasPath; }
 
 	inline void setFilePath(const fs::path path) { m_filePath = path; }
 	inline void setMessage(const string message) { m_message = message; }
+	inline void setError(const int error) { m_error = error; }
 
 private:
 
 	fs::path m_filePath;
 	string m_message;
+	int m_error;
+	bool m_hasPath = true;
 
 };
 
@@ -235,28 +250,21 @@ public:
 	~AutoUpdater();
 
 	int run();
-	inline const int error() const { return m_error; };
 	
 	int downloadVersionNumber();
-	int checkForUpdate();
+	bool checkForUpdate();
 	int downloadUpdate();
 	int unZipUpdate();
 	int installUpdate();
 	int cleanup();
 
 private:
-	void _StartupProcess(LPCTSTR lpApplicationName, errno_t &err);
 	static size_t _WriteCallback(void *contents, size_t size, size_t nmemb, void *userp);
 	static size_t _WriteData(void *ptr, size_t size, size_t nmemb, FILE *stream);
 	static int _DownloadProgress(void* ptr, double total_download, double downloaded, double total_upload, double uploaded);
 	void _SetDirs(const char* process_location = "");
-	int _RenameAndCopy(const fs::path &path);
-	int _RenameAndCopy(char* path);
-	bool _OutFlags();
-	void debug_perms(fs::perms p);
-	void debug_status(const fs::path& p, fs::file_status s);
-
-	errno_t m_error;
+	int _RenameAndCopy(const char* path);
+	void _OutFlags();
 
 protected:
 	Version *m_version;
