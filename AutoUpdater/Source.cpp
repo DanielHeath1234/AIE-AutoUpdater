@@ -3,7 +3,8 @@
 int main()
 {
 	// TODO: Make into a dll. https://msdn.microsoft.com/en-us/library/ms235636.aspx <-ezlyfe
-	// TODO: Create note of what input is expected for _SetDirs() to function correctly. 
+	// TODO: Create note of what input is expected for _SetDirs() to function correctly.
+	// TODO: m_directory may not be set correctly based on where process is being ran from.
 
 	auto Updater = new AutoUpdater(Version("1.0"), // Current Project Version.
 		"https://raw.githubusercontent.com/DanielHeath1234/AIE-AutoUpdater/master/version", // Download link to raw text file containing a version number.

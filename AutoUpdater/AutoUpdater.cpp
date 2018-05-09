@@ -382,7 +382,7 @@ int AutoUpdater::installUpdate()
 		}
 		else // File
 		{
-			// TODO: Do not overwrite AutoUpdater source. Avoid overwriting with old code.
+			// Do not overwrite AutoUpdater source. Avoid overwriting with old code.
 			/*if (p.path().filename() == "AutoUpdater.cpp" || p.path().filename() == "AutoUpdater.h" || p.path().filename() == "Source.cpp")
 			{
 				continue;
@@ -391,7 +391,6 @@ int AutoUpdater::installUpdate()
 			{
 				if (p.path().extension() == ".dll") // Checks if file is a dll (if in use, cannot be updated)
 				{
-					// TODO: Check every file for differences. Size, date, checksum, hash.
 					// Attempts update if there is a difference between update and install
 					//  as well as checks for successful overwrite.
 					uintmax_t updateFileSize = fs::file_size(p.path());
@@ -542,13 +541,12 @@ void AutoUpdater::_SetDirs(const char* process_location)
 		GetModuleFileName(NULL, m_exeLOC, sizeof(m_directory)) :
 		strncpy_s(m_exeLOC, process_location, sizeof(m_exeLOC));
 	
-	// TODO: This may not be directory to write over.
 	// Remove process name and extension from m_exeLOC and
 	// set m_directory to folder containing process.
 	string dir(m_exeLOC);
 	std::size_t found = dir.find_last_of("/\\");
 	string path = dir.substr(0, found);
-	strncpy_s(m_directory, (char*)path.c_str(), sizeof(m_directory));
+	strncpy_s(m_directory, (char*)path.c_str(), sizeof(m_directory)); // Solution Directory.
 
 	// Set m_downloadDIR to temp folder within directory.
 	path += "\\temp\\";
